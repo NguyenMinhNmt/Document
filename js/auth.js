@@ -129,7 +129,7 @@ async function handleLogin(event) {
       .eq("id", authData.user.id);
 
     showMessage("Đăng nhập thành công, đang chuyển hướng...", "success");
-    window.location.href = profile.is_admin ? "admin.html" : "user.html";
+    window.location.href = profile.is_admin ? "/html/admin.html" : "/html/user.html";
   } catch (error) {
     showMessage(translateAuthError(error), "error");
   } finally {
