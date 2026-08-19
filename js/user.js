@@ -52,6 +52,7 @@ async function bootstrapUserPage() {
 
   await loadFolders();
   await CommentModule.init("commentRoot", { userId: currentUser.id, isAdmin: false });
+  restorePageFromHash();
 }
 
 // ---------- 4. ĐIỀU HƯỚNG GIỮA CÁC TAB ----------
@@ -87,8 +88,21 @@ function switchPage(page) {
   elBreadcrumbCurrent.textContent = pageTitles[page];
   elSidebar.classList.remove("open");
 
+  // Ghi nhớ tab đang mở vào URL -> F5 lại vẫn giữ đúng tab, không nhảy về tab đầu
+  if (window.location.hash !== `#${page}`) {
+    history.replaceState(null, "", `#${page}`);
+  }
+
   if (page === "search" && !searchDataLoaded) {
     loadSearchData();
+  }
+}
+
+// Khôi phục lại đúng tab đã mở trước đó (dựa vào URL hash) sau khi bootstrap xong
+function restorePageFromHash() {
+  const savedPage = window.location.hash.replace("#", "");
+  if (savedPage && pageTitles[savedPage]) {
+    switchPage(savedPage);
   }
 }
 
