@@ -327,6 +327,8 @@ function renderUserRow(user) {
   const canManageRole = currentUser.isSuperAdmin && !isSelf && !user.is_super_admin;
   const canDelete = !isSelf && !user.is_super_admin &&
     (currentUser.isSuperAdmin || !user.is_admin); // Admin thường chỉ xóa User thường
+  // Duyệt/Khóa: Admin thường chỉ thao tác được với User thường; Super Admin thao tác được với mọi người (trừ chính mình)
+  const canToggleStatus = !isSelf && (currentUser.isSuperAdmin || !user.is_admin);
 
   return /* html */ `
     <tr data-user-id="${user.id}">
@@ -337,8 +339,8 @@ function renderUserRow(user) {
       <td>${user.last_sign_in_at ? formatDate(user.last_sign_in_at) : "-"}</td>
       <td>
         <div class="actions">
-          ${!user.status ? `<button class="action-btn" data-approve-user title="Duyệt">✓</button>` : ""}
-          ${user.status ? `<button class="action-btn" data-lock-user title="Khóa">🔒</button>` : ""}
+          ${!user.status && canToggleStatus ? `<button class="action-btn" data-approve-user title="Duyệt">✓</button>` : ""}
+          ${user.status && canToggleStatus ? `<button class="action-btn" data-lock-user title="Khóa">🔒</button>` : ""}
           ${canManageRole
       ? `<button class="action-btn" data-toggle-admin title="${user.is_admin ? "Thu quyền Admin" : "Cấp quyền Admin"}">${user.is_admin ? "▾" : "▴"}</button>`
       : ""}
