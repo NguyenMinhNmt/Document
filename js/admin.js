@@ -1,0 +1,696 @@
+/* ==========================================================================
+   ADMIN.JS - Xử lý toàn bộ trang Admin:
+   Quản lý file / Quản lý user / Upload / Lịch sử / Thảo luận
+   Dùng cho: html/admin.html
+   Phụ thuộc: js/config.js, js/comment.js (nhúng TRƯỚC file này)
+   ========================================================================== */
+
+// ---------- 1. TRẠNG THÁI DÙNG CHUNG TOÀN FILE ----------
+let currentUser = null; // { id, name, isAdmin, isSuperAdmin }
+let folderList = [];    // cache folder (dùng cho Upload + đổi folder)
+let allFiles = [];      // cache toàn bộ file (Quản lý file)
+let allUsers = [];      // cache toàn bộ user (Quản lý user)
+let toastTimer;
+
+const elSidebar = document.getElementById("sidebar");
+const elBreadcrumbCurrent = document.getElementById("breadcrumbCurrent");
+const elUserNameLabel = document.getElementById("userNameLabel");
+const elUserAvatar = document.getElementById("userAvatar");
+
+// ---------- 2. KHỞI CHẠY TRANG (auth guard + tải dữ liệu ban đầu) ----------
+bootstrapAdminPage();
+
+async function bootstrapAdminPage() {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session) {
+    window.location.href = "login.html";
+    return;
+  }
+
+  const { data: profile, error } = await supabaseClient
+    .from("user")
+    .select("user_name, status, is_admin, is_super_admin")
+    .eq("id", session.user.id)
+    .single();
+
+  if (error || !profile || !profile.status) {
+    await supabaseClient.auth.signOut();
+    window.location.href = "login.html";
+    return;
+  }
+
+  // Không phải Admin thì không được vào trang này
+  if (!profile.is_admin) {
+    window.location.href = "user.html";
+    return;
+  }
+
+  currentUser = {
+    id: session.user.id,
+    name: profile.user_name || "Admin",
+    isAdmin: true,
+    isSuperAdmin: !!profile.is_super_admin,
+  };
+
+  elUserNameLabel.textContent = currentUser.name + (currentUser.isSuperAdmin ? " (Super Admin)" : "");
+  elUserAvatar.textContent = currentUser.name.slice(0, 2).toUpperCase();
+
+  await loadFolders();
+  await loadFiles();
+  await loadUsers();
+  await loadHistory();
+  await loadSettings();
+  await CommentModule.init("commentRoot", { userId: currentUser.id, isAdmin: true });
+}
+
+// ---------- 3. ĐIỀU HƯỚNG GIỮA CÁC TAB ----------
+document.addEventListener("click", (event) => {
+  const nav = event.target.closest("[data-page]");
+  if (nav) switchPage(nav.dataset.page);
+});
+
+document.getElementById("menuToggle").addEventListener("click", () => {
+  elSidebar.classList.toggle("open");
+});
+
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+  await supabaseClient.auth.signOut();
+  window.location.href = "login.html";
+});
+
+const pageTitles = {
+  files: "Quản lý file",
+  folders: "Quản lý folder",
+  users: "Quản lý user",
+  upload: "Upload",
+  history: "Lịch sử",
+  discussion: "Thảo luận",
+  settings: "Cài đặt",
+};
+
+function switchPage(page) {
+  document.querySelectorAll(".nav-item").forEach((item) => {
+    item.classList.toggle("active", item.dataset.page === page);
+  });
+  document.querySelectorAll(".page").forEach((section) => section.classList.remove("active"));
+  document.getElementById(`${page}Page`).classList.add("active");
+  elBreadcrumbCurrent.textContent = pageTitles[page];
+  elSidebar.classList.remove("open");
+}
+
+// ==========================================================================
+// TAB: QUẢN LÝ FILE
+// ==========================================================================
+
+document.getElementById("fileSearchInput").addEventListener("input", renderFileTable);
+
+async function loadFiles() {
+  const { data, error } = await supabaseClient
+    .from("file")
+    .select("id, file_name, storage_path, status, created_at, id_folder, id_user, folder:id_folder(display_name), user:id_user(user_name)")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    showToast("Không tải được file", error.message);
+    return;
+  }
+
+  allFiles = data || [];
+  renderFileTable();
+}
+
+function renderFileTable() {
+  const keyword = document.getElementById("fileSearchInput").value.trim().toLowerCase();
+  const list = allFiles.filter((file) => {
+    const haystack = `${file.id} ${file.file_name} ${file.user?.user_name || ""} ${file.folder?.display_name || ""}`.toLowerCase();
+    return haystack.includes(keyword);
+  });
+
+  document.getElementById("fileResultCount").textContent = list.length;
+  document.getElementById("fileEmptyState").hidden = list.length > 0;
+  document.querySelector("#filesPage .table-scroll").hidden = list.length === 0;
+
+  const body = document.getElementById("fileTableBody");
+  body.innerHTML = list.map(renderFileRow).join("");
+  attachFileRowEvents(body);
+}
+
+function renderFileRow(file) {
+  const statusHtml = file.status
+    ? `<span class="status active">Hoạt động</span>`
+    : `<span class="status inactive">Đã xóa mềm</span>`;
+
+  return /* html */ `
+    <tr data-file-id="${file.id}" data-storage-path="${escapeAttr(file.storage_path)}" data-status="${file.status}">
+      <td>#${file.id}</td>
+      <td>${escapeHTML(file.file_name)}</td>
+      <td>${escapeHTML(file.folder?.display_name || "-")}</td>
+      <td>${escapeHTML(file.user?.user_name || "-")}</td>
+      <td>${statusHtml}</td>
+      <td>${formatDate(file.created_at)}</td>
+      <td>
+        <div class="actions">
+          <button class="action-btn" data-view-file title="Xem">👁</button>
+          <button class="action-btn" data-download-file title="Tải về">⬇</button>
+          <button class="action-btn" data-rename-file title="Đổi tên">✎</button>
+          <button class="action-btn" data-move-file title="Đổi folder">📁</button>
+          ${file.status
+      ? ""
+      : `<button class="action-btn" data-restore-file title="Khôi phục">↺</button>`}
+          <button class="action-btn delete" data-purge-file title="Xóa vĩnh viễn">⌫</button>
+        </div>
+      </td>
+    </tr>`;
+}
+
+function attachFileRowEvents(container) {
+  container.querySelectorAll("tr[data-file-id]").forEach((row) => {
+    const fileId = row.dataset.fileId;
+    const storagePath = row.dataset.storagePath;
+
+    row.querySelector("[data-view-file]")?.addEventListener("click", () => openFileUrl(storagePath, false));
+    row.querySelector("[data-download-file]")?.addEventListener("click", () => openFileUrl(storagePath, true));
+    row.querySelector("[data-rename-file]")?.addEventListener("click", () => renameFile(fileId, row));
+    row.querySelector("[data-move-file]")?.addEventListener("click", () => moveFile(fileId));
+    row.querySelector("[data-restore-file]")?.addEventListener("click", () => restoreFile(fileId));
+    row.querySelector("[data-purge-file]")?.addEventListener("click", () => purgeFile(fileId));
+  });
+}
+
+async function openFileUrl(storagePath, isDownload) {
+  const bucketName = storagePath.split("/")[0];
+  const pathInsideBucket = storagePath.split("/").slice(1).join("/");
+  const extension = pathInsideBucket.split(".").pop().toLowerCase();
+
+  const { data, error } = await supabaseClient.storage
+    .from(bucketName)
+    .createSignedUrl(pathInsideBucket, 300, isDownload ? { download: true } : undefined);
+
+  if (error) {
+    showToast("Không mở được file", error.message);
+    return;
+  }
+
+  if (isDownload) {
+    window.open(data.signedUrl, "_blank");
+    return;
+  }
+
+  const officeExtensions = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"];
+  if (officeExtensions.includes(extension)) {
+    const viewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(data.signedUrl)}&embedded=true`;
+    window.open(viewerUrl, "_blank");
+  } else {
+    window.open(data.signedUrl, "_blank");
+  }
+}
+
+async function renameFile(fileId, row) {
+  const oldName = row.children[1].textContent;
+  const newName = prompt("Nhập tên mới cho file:", oldName);
+  if (!newName || newName.trim() === "" || newName === oldName) return;
+
+  const { error } = await supabaseClient
+    .from("file")
+    .update({ file_name: newName.trim(), updated_at: new Date().toISOString() })
+    .eq("id", fileId);
+
+  if (error) return showToast("Không đổi tên được", error.message);
+
+  await logHistory(fileId, "Đã sửa");
+  showToast("Đã đổi tên file", "");
+  await loadFiles();
+}
+
+async function moveFile(fileId) {
+  const folderNames = folderList.map((f) => f.display_name).join(", ");
+  const input = prompt(`Nhập đúng tên folder muốn chuyển tới:\n(Các folder có sẵn: ${folderNames})`);
+  if (!input) return;
+
+  const target = folderList.find((f) => f.display_name.toLowerCase() === input.trim().toLowerCase());
+  if (!target) return showToast("Không tìm thấy folder", "Vui lòng gõ đúng tên folder có sẵn.");
+
+  const { error } = await supabaseClient
+    .from("file")
+    .update({ id_folder: target.id, updated_at: new Date().toISOString() })
+    .eq("id", fileId);
+
+  if (error) return showToast("Không đổi được folder", error.message);
+
+  await logHistory(fileId, "Đã sửa");
+  showToast("Đã chuyển folder", `Chuyển sang "${target.display_name}"`);
+  await loadFiles();
+}
+
+async function restoreFile(fileId) {
+  const { error } = await supabaseClient.from("file").update({ status: true }).eq("id", fileId);
+  if (error) return showToast("Không khôi phục được", error.message);
+
+  await logHistory(fileId, "Đã sửa");
+  showToast("Đã khôi phục file", "");
+  await loadFiles();
+}
+
+async function purgeFile(fileId) {
+  const file = allFiles.find((f) => f.id === fileId);
+  if (!file) return;
+  if (!confirm(`XÓA VĨNH VIỄN file "${file.file_name}"? Không thể hoàn tác, kể cả lịch sử liên quan cũng sẽ mất.`)) return;
+
+  try {
+    // 1) Xóa các dòng lịch sử đang tham chiếu tới file này trước
+    //    (DB chưa cấu hình tự xóa cascade, phải xóa tay để tránh lỗi khóa ngoại)
+    const { error: historyError } = await supabaseClient.from("history_file").delete().eq("id_file", fileId);
+    if (historyError) throw historyError;
+
+    // 2) Xóa file vật lý khỏi Storage
+    const bucketName = file.storage_path.split("/")[0];
+    const pathInsideBucket = file.storage_path.split("/").slice(1).join("/");
+    await supabaseClient.storage.from(bucketName).remove([pathInsideBucket]);
+
+    // 3) Xóa dòng dữ liệu file
+    const { error } = await supabaseClient.from("file").delete().eq("id", fileId);
+    if (error) throw error;
+
+    showToast("Đã xóa vĩnh viễn", `File "${file.file_name}" và lịch sử liên quan đã bị xóa.`);
+    await loadFiles();
+    await loadHistory();
+  } catch (error) {
+    showToast("Không xóa vĩnh viễn được", error.message);
+  }
+}
+
+async function logHistory(fileId, change) {
+  await supabaseClient.from("history_file").insert({ id_file: fileId, id_user: currentUser.id, change });
+}
+
+// ==========================================================================
+// TAB: QUẢN LÝ USER
+// ==========================================================================
+
+document.getElementById("userSearchInput").addEventListener("input", renderUserTable);
+
+async function loadUsers() {
+  const { data, error } = await supabaseClient
+    .from("user")
+    .select("id, user_name, gender, status, is_admin, is_super_admin, last_sign_in_at")
+    .order("created_at", { ascending: false });
+
+  if (error) return showToast("Không tải được user", error.message);
+
+  allUsers = data || [];
+  renderUserTable();
+}
+
+function renderUserTable() {
+  const keyword = document.getElementById("userSearchInput").value.trim().toLowerCase();
+  const list = allUsers.filter((u) => (u.user_name || "").toLowerCase().includes(keyword));
+
+  document.getElementById("userResultCount").textContent = list.length;
+  document.getElementById("userEmptyState").hidden = list.length > 0;
+  document.querySelector("#usersPage .table-scroll").hidden = list.length === 0;
+
+  const body = document.getElementById("userTableBody");
+  body.innerHTML = list.map(renderUserRow).join("");
+  attachUserRowEvents(body);
+}
+
+function renderUserRow(user) {
+  const statusHtml = user.status
+    ? `<span class="status active">Đã duyệt</span>`
+    : `<span class="status inactive">Chờ duyệt</span>`;
+
+  let roleHtml = `<span class="badge">User</span>`;
+  if (user.is_super_admin) roleHtml = `<span class="badge">Super Admin</span>`;
+  else if (user.is_admin) roleHtml = `<span class="badge">Admin</span>`;
+
+  const isSelf = user.id === currentUser.id;
+  const canManageRole = currentUser.isSuperAdmin && !isSelf && !user.is_super_admin;
+  const canDelete = !isSelf && !user.is_super_admin &&
+    (currentUser.isSuperAdmin || !user.is_admin); // Admin thường chỉ xóa User thường
+
+  return /* html */ `
+    <tr data-user-id="${user.id}">
+      <td>${escapeHTML(user.user_name || "-")}</td>
+      <td>${user.gender === true ? "Nam" : user.gender === false ? "Nữ" : "-"}</td>
+      <td>${statusHtml}</td>
+      <td>${roleHtml}</td>
+      <td>${user.last_sign_in_at ? formatDate(user.last_sign_in_at) : "-"}</td>
+      <td>
+        <div class="actions">
+          ${!user.status ? `<button class="action-btn" data-approve-user title="Duyệt">✓</button>` : ""}
+          ${user.status ? `<button class="action-btn" data-lock-user title="Khóa">🔒</button>` : ""}
+          ${canManageRole
+      ? `<button class="action-btn" data-toggle-admin title="${user.is_admin ? "Thu quyền Admin" : "Cấp quyền Admin"}">${user.is_admin ? "▾" : "▴"}</button>`
+      : ""}
+          ${canDelete ? `<button class="action-btn delete" data-delete-user title="Xóa">⌫</button>` : ""}
+        </div>
+      </td>
+    </tr>`;
+}
+
+function attachUserRowEvents(container) {
+  container.querySelectorAll("tr[data-user-id]").forEach((row) => {
+    const userId = row.dataset.userId;
+
+    row.querySelector("[data-approve-user]")?.addEventListener("click", () => setUserStatus(userId, true));
+    row.querySelector("[data-lock-user]")?.addEventListener("click", () => setUserStatus(userId, false));
+    row.querySelector("[data-toggle-admin]")?.addEventListener("click", () => toggleAdmin(userId, row));
+    row.querySelector("[data-delete-user]")?.addEventListener("click", () => deleteUser(userId));
+  });
+}
+
+async function setUserStatus(userId, status) {
+  const { error } = await supabaseClient.from("user").update({ status }).eq("id", userId);
+  if (error) return showToast("Không cập nhật được", error.message);
+
+  showToast(status ? "Đã duyệt tài khoản" : "Đã khóa tài khoản", "");
+  await loadUsers();
+}
+
+async function toggleAdmin(userId, row) {
+  const user = allUsers.find((u) => u.id === userId);
+  const { error } = await supabaseClient
+    .from("user")
+    .update({ is_admin: !user.is_admin })
+    .eq("id", userId);
+
+  if (error) return showToast("Không đổi được quyền", error.message);
+
+  showToast(!user.is_admin ? "Đã cấp quyền Admin" : "Đã thu quyền Admin", "");
+  await loadUsers();
+}
+
+async function deleteUser(userId) {
+  if (!confirm("Xóa VĨNH VIỄN tài khoản này? Sẽ xóa cả quyền đăng nhập lẫn hồ sơ, không thể hoàn tác.")) return;
+
+  const { data, error } = await supabaseClient.functions.invoke("delete-user", {
+    body: { userId },
+  });
+
+  if (error || data?.error) {
+    return showToast("Không xóa được", data?.error || error.message);
+  }
+
+  showToast("Đã xóa user", "Tài khoản đã được xóa hoàn toàn khỏi hệ thống.");
+  await loadUsers();
+}
+
+// ==========================================================================
+// TAB: UPLOAD (logic giống hệt bên User)
+// ==========================================================================
+
+document.getElementById("uploadForm").addEventListener("submit", handleUpload);
+
+async function loadFolders() {
+  const { data, error } = await supabaseClient
+    .from("folder")
+    .select("id, display_name, bucket_name")
+    .order("display_name");
+
+  if (error) return showToast("Không tải được folder", error.message);
+
+  folderList = data || [];
+
+  const select = document.getElementById("uploadFolder");
+  select.innerHTML =
+    `<option value="">-- Chọn folder --</option>` +
+    folderList.map((f) => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join("");
+
+  renderFolderManageList();
+}
+
+// ---------- Quản lý Folder (thêm / xóa) ----------
+document.getElementById("folderForm").addEventListener("submit", handleAddFolder);
+
+function renderFolderManageList() {
+  const body = document.getElementById("folderManageBody");
+  body.innerHTML = folderList
+    .map(
+      (f) => /* html */ `
+      <tr data-folder-id="${f.id}">
+        <td>${escapeHTML(f.display_name)}</td>
+        <td>${escapeHTML(f.bucket_name)}</td>
+        <td>
+          <div class="actions">
+            <button class="action-btn" data-edit-folder="${f.id}" title="Sửa tên">✎</button>
+            <button class="action-btn delete" data-delete-folder="${f.id}" title="Xóa">⌫</button>
+          </div>
+        </td>
+      </tr>`
+    )
+    .join("");
+
+  body.querySelectorAll("[data-edit-folder]").forEach((btn) => {
+    btn.addEventListener("click", () => handleEditFolder(btn.dataset.editFolder));
+  });
+  body.querySelectorAll("[data-delete-folder]").forEach((btn) => {
+    btn.addEventListener("click", () => handleDeleteFolder(btn.dataset.deleteFolder));
+  });
+}
+
+async function handleEditFolder(folderId) {
+  const folder = folderList.find((f) => f.id === folderId);
+  const newName = prompt("Nhập tên hiển thị mới cho folder:", folder?.display_name || "");
+  if (!newName || newName.trim() === "" || newName === folder?.display_name) return;
+
+  const { error } = await supabaseClient
+    .from("folder")
+    .update({ display_name: newName.trim() })
+    .eq("id", folderId);
+
+  if (error) return showToast("Không đổi được tên folder", error.message);
+
+  showToast("Đã đổi tên folder", "");
+  await loadFolders();
+}
+
+async function handleAddFolder(event) {
+  event.preventDefault();
+  const displayName = document.getElementById("folderDisplayName").value.trim();
+  const bucketName = document.getElementById("folderBucketName").value.trim();
+  if (!displayName || !bucketName) return;
+
+  const { error } = await supabaseClient
+    .from("folder")
+    .insert({ display_name: displayName, bucket_name: bucketName, created_by: currentUser.id });
+
+  if (error) {
+    if (error.message.includes("duplicate"))
+      return showToast("Không thêm được", "Tên bucket này đã được khai báo rồi.");
+    return showToast("Không thêm được folder", error.message);
+  }
+
+  showToast("Đã thêm folder", `"${displayName}" đã sẵn sàng để upload.`);
+  document.getElementById("folderForm").reset();
+  await loadFolders();
+}
+
+async function handleDeleteFolder(folderId) {
+  if (!confirm("Xóa folder này? Chỉ xóa được nếu folder không còn chứa file nào.")) return;
+
+  const { error } = await supabaseClient.from("folder").delete().eq("id", folderId);
+
+  if (error) {
+    // Lỗi khóa ngoại xảy ra khi folder vẫn còn file bên trong tham chiếu tới
+    if (error.message.includes("foreign key") || error.message.includes("violates"))
+      return showToast("Không xóa được", "Folder này vẫn còn chứa file, hãy xóa/chuyển hết file trước.");
+    return showToast("Không xóa được folder", error.message);
+  }
+
+  showToast("Đã xóa folder", "");
+  await loadFolders();
+}
+
+async function handleUpload(event) {
+  event.preventDefault();
+  const submitBtn = document.getElementById("uploadSubmitBtn");
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Đang tải lên...";
+
+  try {
+    const folderId = document.getElementById("uploadFolder").value;
+    const folder = folderList.find((f) => f.id === folderId);
+    const rawFile = document.getElementById("uploadFile").files[0];
+    const bio = document.getElementById("uploadBio").value.trim();
+    let displayName = document.getElementById("uploadName").value.trim() || rawFile.name;
+
+    if (!folder) throw new Error("Vui lòng chọn folder.");
+    if (!rawFile) throw new Error("Vui lòng chọn file để tải lên.");
+
+    displayName = await resolveDuplicateName(displayName, folderId);
+
+    const safeExt = rawFile.name.includes(".") ? rawFile.name.split(".").pop() : "";
+    const storageFileName = `${crypto.randomUUID()}${safeExt ? "." + safeExt : ""}`;
+    const storagePath = `${folder.bucket_name}/${currentUser.id}/${storageFileName}`;
+    const pathInsideBucket = `${currentUser.id}/${storageFileName}`;
+
+    const { error: uploadError } = await supabaseClient.storage
+      .from(folder.bucket_name)
+      .upload(pathInsideBucket, rawFile);
+    if (uploadError) throw uploadError;
+
+    const { data: newFile, error: insertError } = await supabaseClient
+      .from("file")
+      .insert({ file_name: displayName, storage_path: storagePath, id_folder: folderId, id_user: currentUser.id, bio })
+      .select()
+      .single();
+    if (insertError) throw insertError;
+
+    await logHistory(newFile.id, "Đã thêm");
+
+    showToast("Tải lên thành công", `File "${displayName}" đã được lưu.`);
+    document.getElementById("uploadForm").reset();
+    await loadFiles();
+  } catch (error) {
+    showToast("Tải lên thất bại", error.message || "Vui lòng thử lại.");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "⬆ Tải lên";
+  }
+}
+
+async function resolveDuplicateName(name, folderId) {
+  const { data } = await supabaseClient
+    .from("file")
+    .select("file_name")
+    .eq("id_folder", folderId)
+    .eq("id_user", currentUser.id)
+    .eq("status", true);
+
+  const existingNames = new Set((data || []).map((f) => f.file_name));
+  if (!existingNames.has(name)) return name;
+
+  let counter = 1;
+  let candidate = `${name} (${counter})`;
+  while (existingNames.has(candidate)) {
+    counter += 1;
+    candidate = `${name} (${counter})`;
+  }
+  return candidate;
+}
+
+// ==========================================================================
+// TAB: LỊCH SỬ (chỉ xem)
+// ==========================================================================
+
+async function loadHistory() {
+  const [fileHistoryResult, adminHistoryResult] = await Promise.all([
+    supabaseClient
+      .from("history_file")
+      .select("id, created_at, change, file:id_file(file_name), user:id_user(user_name)")
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabaseClient
+      .from("history_admin")
+      .select("id, created_at, action, actor:actor_id(user_name), target:target_id(user_name)")
+      .order("created_at", { ascending: false })
+      .limit(200),
+  ]);
+
+  if (fileHistoryResult.error) return showToast("Không tải được lịch sử file", fileHistoryResult.error.message);
+  if (adminHistoryResult.error) return showToast("Không tải được lịch sử phân quyền", adminHistoryResult.error.message);
+
+  // Gộp 2 nguồn thành 1 danh sách chung, mỗi dòng tự biết cách hiển thị chính mình
+  const fileEntries = (fileHistoryResult.data || []).map((h) => ({
+    time: h.created_at,
+    target: h.file?.file_name || "(file đã bị xóa vĩnh viễn)",
+    actor: h.user?.user_name || "-",
+    action: h.change,
+  }));
+
+  const adminEntries = (adminHistoryResult.data || []).map((h) => ({
+    time: h.created_at,
+    target: h.target?.user_name || "-",
+    actor: h.actor?.user_name || "-",
+    action: h.action,
+  }));
+
+  const merged = [...fileEntries, ...adminEntries].sort((a, b) => new Date(b.time) - new Date(a.time));
+
+  document.getElementById("historyEmptyState").hidden = merged.length > 0;
+  document.querySelector("#historyPage .table-scroll").hidden = merged.length === 0;
+
+  document.getElementById("historyTableBody").innerHTML = merged
+    .map(
+      (h) => /* html */ `
+      <tr>
+        <td>${formatDateTime(h.time)}</td>
+        <td>${escapeHTML(h.target)}</td>
+        <td>${escapeHTML(h.actor)}</td>
+        <td>${escapeHTML(h.action)}</td>
+      </tr>`
+    )
+    .join("");
+}
+
+// ==========================================================================
+// TAB: CÀI ĐẶT (site_setting - chỉ có 1 dòng duy nhất, id = 1)
+// ==========================================================================
+
+document.getElementById("settingsForm").addEventListener("submit", handleSaveSettings);
+
+async function loadSettings() {
+  const { data, error } = await supabaseClient
+    .from("site_setting")
+    .select("phone, email, facebook")
+    .eq("id", 1)
+    .single();
+
+  if (error || !data) return; // chưa có dòng dữ liệu nào -> để trống cho Admin tự điền lần đầu
+
+  document.getElementById("settingPhone").value = data.phone || "";
+  document.getElementById("settingEmail").value = data.email || "";
+  document.getElementById("settingFacebook").value = data.facebook || "";
+}
+
+async function handleSaveSettings(event) {
+  event.preventDefault();
+  const submitBtn = document.getElementById("settingsSubmitBtn");
+  submitBtn.disabled = true;
+
+  const payload = {
+    id: 1,
+    phone: document.getElementById("settingPhone").value.trim(),
+    email: document.getElementById("settingEmail").value.trim(),
+    facebook: document.getElementById("settingFacebook").value.trim(),
+    updated_at: new Date().toISOString(),
+  };
+
+  // upsert: nếu dòng id=1 chưa tồn tại thì tự tạo mới, có rồi thì cập nhật
+  const { error } = await supabaseClient.from("site_setting").upsert(payload);
+
+  submitBtn.disabled = false;
+  if (error) return showToast("Không lưu được", error.message);
+
+  showToast("Đã lưu cài đặt", "Thông tin liên hệ đã được cập nhật.");
+}
+
+// ==========================================================================
+// HÀM TIỆN ÍCH DÙNG CHUNG
+// ==========================================================================
+
+function showToast(title, message) {
+  clearTimeout(toastTimer);
+  document.getElementById("toastTitle").textContent = title;
+  document.getElementById("toastMessage").textContent = message;
+  document.getElementById("toast").classList.add("show");
+  toastTimer = setTimeout(() => document.getElementById("toast").classList.remove("show"), 2800);
+}
+
+function formatDate(isoString) {
+  return new Date(isoString).toLocaleDateString("vi-VN");
+}
+
+function formatDateTime(isoString) {
+  return new Date(isoString).toLocaleString("vi-VN");
+}
+
+function escapeHTML(value = "") {
+  return String(value).replace(/[&<>'"]/g, (char) => {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char];
+  });
+}
+
+function escapeAttr(value = "") {
+  return escapeHTML(value);
+}
