@@ -105,7 +105,8 @@
             <form id="uploadForm" class="form-grid single" style="padding:1.5rem;">
               <div class="form-field">
                 <label for="uploadName">Tên file hiển thị (để trống sẽ giữ nguyên tên file gốc)</label>
-                <input class="form-control" type="text" id="uploadName" name="file_name" placeholder="VD: Báo cáo tháng 8">
+                <input class="form-control" type="text" id="uploadName" name="file_name"
+                  placeholder="VD: Báo cáo tháng 8">
               </div>
               <div class="form-field">
                 <label for="uploadFolder">Chọn folder</label>
@@ -120,7 +121,8 @@
               </div>
               <div class="form-field">
                 <label for="uploadBio">Mô tả file</label>
-                <textarea class="form-control" id="uploadBio" name="bio" placeholder="Mô tả ngắn gọn nội dung file..."></textarea>
+                <textarea class="form-control" id="uploadBio" name="bio"
+                  placeholder="Mô tả ngắn gọn nội dung file..."></textarea>
               </div>
               <button type="submit" class="button button-primary" id="uploadSubmitBtn" style="justify-content:center;">
                 ⬆ Tải lên
@@ -154,6 +156,7 @@
                     <th>Tên file</th>
                     <th>Folder</th>
                     <th>Người upload</th>
+                    <th>Trạng thái</th>
                     <th>Thao tác</th>
                   </tr>
                 </thead>
@@ -204,11 +207,13 @@
               </div>
               <div class="form-field">
                 <label for="accountConfirmPassword">Nhập lại mật khẩu mới</label>
-                <input class="form-control" type="password" id="accountConfirmPassword" placeholder="Nhập lại mật khẩu mới">
+                <input class="form-control" type="password" id="accountConfirmPassword"
+                  placeholder="Nhập lại mật khẩu mới">
               </div>
               <div class="form-field">
                 <label for="accountCurrentPassword">Mật khẩu HIỆN TẠI (bắt buộc để xác thực)</label>
-                <input class="form-control" type="password" id="accountCurrentPassword" placeholder="Nhập mật khẩu đang dùng" required>
+                <input class="form-control" type="password" id="accountCurrentPassword"
+                  placeholder="Nhập mật khẩu đang dùng" required>
               </div>
               <div class="form-field">
                 <button type="submit" class="button button-primary" id="accountSubmitBtn">✓ Cập nhật</button>

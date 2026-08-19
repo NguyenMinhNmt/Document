@@ -156,9 +156,7 @@ function renderFileRow(file) {
           <button class="action-btn" data-download-file title="Tải về">⬇</button>
           <button class="action-btn" data-rename-file title="Đổi tên">✎</button>
           <button class="action-btn" data-move-file title="Đổi folder">📁</button>
-          ${file.status
-      ? ""
-      : `<button class="action-btn" data-restore-file title="Khôi phục">↺</button>`}
+          <button class="action-btn" data-toggle-status="${file.status}" title="${file.status ? "Ẩn file" : "Hiện lại file"}">${file.status ? "🚫" : "↺"}</button>
           <button class="action-btn delete" data-purge-file title="Xóa vĩnh viễn">⌫</button>
         </div>
       </td>
@@ -174,7 +172,11 @@ function attachFileRowEvents(container) {
     row.querySelector("[data-download-file]")?.addEventListener("click", () => openFileUrl(storagePath, true));
     row.querySelector("[data-rename-file]")?.addEventListener("click", () => renameFile(fileId, row));
     row.querySelector("[data-move-file]")?.addEventListener("click", () => moveFile(fileId));
-    row.querySelector("[data-restore-file]")?.addEventListener("click", () => restoreFile(fileId));
+    const toggleBtn = row.querySelector("[data-toggle-status]");
+    if (toggleBtn) {
+      const currentStatus = toggleBtn.dataset.toggleStatus === "true";
+      toggleBtn.addEventListener("click", () => toggleFileStatus(fileId, currentStatus));
+    }
     row.querySelector("[data-purge-file]")?.addEventListener("click", () => purgeFile(fileId));
   });
 }
@@ -244,12 +246,13 @@ async function moveFile(fileId) {
   await loadFiles();
 }
 
-async function restoreFile(fileId) {
-  const { error } = await supabaseClient.from("file").update({ status: true }).eq("id", fileId);
-  if (error) return showToast("Không khôi phục được", error.message);
+async function toggleFileStatus(fileId, currentStatus) {
+  const newStatus = !currentStatus;
+  const { error } = await supabaseClient.from("file").update({ status: newStatus }).eq("id", fileId);
+  if (error) return showToast("Không cập nhật được", error.message);
 
-  await logHistory(fileId, "Đã sửa");
-  showToast("Đã khôi phục file", "");
+  await logHistory(fileId, newStatus ? "Đã sửa" : "Đã xóa");
+  showToast(newStatus ? "Đã hiện lại file" : "Đã ẩn file", "");
   await loadFiles();
 }
 

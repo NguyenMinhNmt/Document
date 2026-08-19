@@ -405,8 +405,7 @@ document.getElementById("searchInput").addEventListener("input", renderSearchRes
 async function loadSearchData() {
   const { data, error } = await supabaseClient
     .from("file")
-    .select("id, file_name, storage_path, id_user, user:id_user(user_name), folder:id_folder(display_name)")
-    .eq("status", true)
+    .select("id, file_name, storage_path, id_user, status, user:id_user(user_name), folder:id_folder(display_name)")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -414,7 +413,8 @@ async function loadSearchData() {
     return;
   }
 
-  allSearchableFiles = data || [];
+  // Chỉ hiện: file đang hoạt động, HOẶC file của chính mình dù đang bị ẩn
+  allSearchableFiles = (data || []).filter((f) => f.status || f.id_user === currentUser.id);
   searchDataLoaded = true;
   renderSearchResults();
 }
@@ -433,21 +433,29 @@ function renderSearchResults() {
 
   const body = document.getElementById("searchResultBody");
   body.innerHTML = results
-    .map(
-      (file) => /* html */ `
-      <tr data-storage-path="${escapeAttr(file.storage_path)}">
+    .map((file) => {
+      const isOwner = file.id_user === currentUser.id;
+      const statusBadge = file.status
+        ? `<span class="status active">Hoạt động</span>`
+        : `<span class="status inactive">Đã ẩn</span>`;
+      return /* html */ `
+      <tr data-file-id="${file.id}" data-storage-path="${escapeAttr(file.storage_path)}">
         <td>#${file.id}</td>
         <td>${escapeHTML(file.file_name)}</td>
         <td>${escapeHTML(file.folder?.display_name || "-")}</td>
         <td>${escapeHTML(file.user?.user_name || "-")}</td>
+        <td>${statusBadge}</td>
         <td>
           <div class="actions">
             <button class="action-btn" data-view-file title="Xem">👁</button>
             <button class="action-btn" data-download-file title="Tải về">⬇</button>
+            ${isOwner
+          ? `<button class="action-btn" data-toggle-status="${file.status}" title="${file.status ? "Ẩn file" : "Hiện lại file"}">${file.status ? "🚫" : "↺"}</button>`
+          : ""}
           </div>
         </td>
-      </tr>`
-    )
+      </tr>`;
+    })
     .join("");
 
   attachFileRowEvents(body);
