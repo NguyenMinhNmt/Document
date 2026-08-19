@@ -183,7 +183,7 @@ async function redirectByRole(userId) {
 
   if (!profile || !profile.status) return; // chưa được duyệt -> ở lại trang login
 
-  window.location.href = profile.is_admin ? "admin.html" : "user.html";
+  window.location.href = profile.is_admin ? "/html/admin.html" : "/html/user.html";
 }
 
 // ---------- 8. HÀM TIỆN ÍCH ----------

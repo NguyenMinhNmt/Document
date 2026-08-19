@@ -42,7 +42,7 @@ async function bootstrapUserPage() {
 
   // Admin thì không ở trang User, đẩy sang trang riêng
   if (profile.is_admin) {
-    window.location.href = "admin.html";
+    window.location.href = "/html/admin.html";
     return;
   }
 
