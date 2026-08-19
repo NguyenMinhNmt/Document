@@ -34,6 +34,7 @@
         <button class="nav-item" data-page="history"><span class="nav-icon">⏱</span> Lịch sử</button>
         <button class="nav-item" data-page="discussion"><span class="nav-icon">💬</span> Thảo luận</button>
         <button class="nav-item" data-page="settings"><span class="nav-icon">⚙</span> Cài đặt</button>
+        <button class="nav-item" data-page="account"><span class="nav-icon">👤</span> Tài khoản</button>
       </nav>
 
       <div class="sidebar-note">
@@ -279,6 +280,43 @@
               </div>
               <div class="form-field">
                 <button type="submit" class="button button-primary" id="settingsSubmitBtn">✓ Lưu thay đổi</button>
+              </div>
+            </form>
+          </section>
+        </section>
+
+        <!-- ================= TAB: TÀI KHOẢN ================= -->
+        <section class="page" id="accountPage">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">TÀI KHOẢN</p>
+              <h1>Cập nhật tài khoản</h1>
+              <p>Đổi tên hiển thị hoặc mật khẩu — cần nhập đúng mật khẩu hiện tại</p>
+            </div>
+          </div>
+
+          <section class="card">
+            <form id="accountForm" class="form-grid single" style="padding:1.5rem;">
+              <div class="form-field">
+                <label for="accountNewName">Tên hiển thị mới (để trống nếu không đổi)</label>
+                <input class="form-control" type="text" id="accountNewName" placeholder="Tên hiển thị mới">
+              </div>
+              <div class="form-field">
+                <label for="accountNewPassword">Mật khẩu mới (để trống nếu không đổi)</label>
+                <input class="form-control" type="password" id="accountNewPassword" placeholder="Tối thiểu 6 ký tự">
+              </div>
+              <div class="form-field">
+                <label for="accountConfirmPassword">Nhập lại mật khẩu mới</label>
+                <input class="form-control" type="password" id="accountConfirmPassword"
+                  placeholder="Nhập lại mật khẩu mới">
+              </div>
+              <div class="form-field">
+                <label for="accountCurrentPassword">Mật khẩu HIỆN TẠI (bắt buộc để xác thực)</label>
+                <input class="form-control" type="password" id="accountCurrentPassword"
+                  placeholder="Nhập mật khẩu đang dùng" required>
+              </div>
+              <div class="form-field">
+                <button type="submit" class="button button-primary" id="accountSubmitBtn">✓ Cập nhật</button>
               </div>
             </form>
           </section>

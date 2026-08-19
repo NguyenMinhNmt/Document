@@ -48,6 +48,7 @@ async function bootstrapAdminPage() {
   currentUser = {
     id: session.user.id,
     name: profile.user_name || "Admin",
+    email: session.user.email,
     isAdmin: true,
     isSuperAdmin: !!profile.is_super_admin,
   };
@@ -86,6 +87,7 @@ const pageTitles = {
   history: "Lịch sử",
   discussion: "Thảo luận",
   settings: "Cài đặt",
+  account: "Tài khoản",
 };
 
 function switchPage(page) {
@@ -665,6 +667,55 @@ async function handleSaveSettings(event) {
   if (error) return showToast("Không lưu được", error.message);
 
   showToast("Đã lưu cài đặt", "Thông tin liên hệ đã được cập nhật.");
+}
+
+// ==========================================================================
+// TAB: TÀI KHOẢN (đổi tên hiển thị / đổi mật khẩu - cần xác thực mật khẩu hiện tại)
+// ==========================================================================
+
+document.getElementById("accountForm").addEventListener("submit", handleUpdateAccount);
+
+async function handleUpdateAccount(event) {
+  event.preventDefault();
+  const submitBtn = document.getElementById("accountSubmitBtn");
+  submitBtn.disabled = true;
+
+  try {
+    const newName = document.getElementById("accountNewName").value.trim();
+    const newPassword = document.getElementById("accountNewPassword").value;
+    const confirmPassword = document.getElementById("accountConfirmPassword").value;
+    const currentPassword = document.getElementById("accountCurrentPassword").value;
+
+    if (!newName && !newPassword) throw new Error("Bạn chưa nhập gì để cập nhật.");
+    if (newPassword && newPassword !== confirmPassword) throw new Error("Mật khẩu mới nhập lại không khớp.");
+    if (newPassword && newPassword.length < 6) throw new Error("Mật khẩu mới cần tối thiểu 6 ký tự.");
+
+    const { error: reauthError } = await supabaseClient.auth.signInWithPassword({
+      email: currentUser.email,
+      password: currentPassword,
+    });
+    if (reauthError) throw new Error("Mật khẩu hiện tại không đúng.");
+
+    if (newName) {
+      const { error } = await supabaseClient.from("user").update({ user_name: newName }).eq("id", currentUser.id);
+      if (error) throw error;
+      currentUser.name = newName;
+      elUserNameLabel.textContent = currentUser.name + (currentUser.isSuperAdmin ? " (Super Admin)" : "");
+      elUserAvatar.textContent = currentUser.name.slice(0, 2).toUpperCase();
+    }
+
+    if (newPassword) {
+      const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+    }
+
+    showToast("Đã cập nhật tài khoản", "");
+    document.getElementById("accountForm").reset();
+  } catch (error) {
+    showToast("Không cập nhật được", error.message || "Vui lòng thử lại.");
+  } finally {
+    submitBtn.disabled = false;
+  }
 }
 
 // ==========================================================================
