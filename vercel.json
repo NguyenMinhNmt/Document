@@ -3,6 +3,18 @@
     {
       "source": "/",
       "destination": "/html/login.html"
+    },
+    {
+      "source": "/login",
+      "destination": "/html/login.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/html/admin.html"
+    },
+    {
+      "source": "/user",
+      "destination": "/html/user.html"
     }
   ]
 }
