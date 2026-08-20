@@ -499,7 +499,6 @@ function renderSearchResults() {
         : `<span class="status inactive">Đã ẩn</span>`;
       return /* html */ `
       <tr data-file-id="${file.id}" data-storage-path="${escapeAttr(file.storage_path)}">
-        <td>#${file.id}</td>
         <td>${escapeHTML(file.file_name)}</td>
         <td>${escapeHTML(file.folder?.display_name || "-")}</td>
         <td>${escapeHTML(file.user?.user_name || "-")}</td>

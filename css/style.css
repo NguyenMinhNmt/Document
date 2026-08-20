@@ -47,6 +47,14 @@
   --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
+/* ---------- 1.5. ĐẢM BẢO hidden LUÔN HOẠT ĐỘNG ĐÚNG ---------- */
+/* Nhiều class ở dưới có set display (flex/inline-flex...), theo mặc định sẽ
+   VÔ TÌNH ĐÈ MẤT thuộc tính hidden gốc của trình duyệt. Luật này đảm bảo
+   bất kỳ phần tử nào bị set hidden qua JS đều chắc chắn ẩn thật sự. */
+[hidden] {
+  display: none !important;
+}
+
 /* ---------- 2. RESET CƠ BẢN ---------- */
 * {
   box-sizing: border-box;
