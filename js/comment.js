@@ -80,8 +80,18 @@ const CommentModule = (() => {
 
   function renderCommentItem(comment) {
     const replies = allComments.filter((c) => c.parent_id === comment.id);
-    const canDelete = comment.id_user === currentUserId || currentIsAdmin;
+    const isOwner = comment.id_user === currentUserId;
+    const withinWindow = isWithinEditWindow(comment.created_at);
+    const hasReplies = allComments.some((c) => c.parent_id === comment.id);
+
+    const canEdit = isOwner && withinWindow;
+    const canDelete = currentIsAdmin || (isOwner && withinWindow && !hasReplies);
     const userName = comment.user?.user_name || "Người dùng ẩn danh";
+
+    // Giới hạn 3 tầng: nếu comment này đã ở tầng 3 (sâu nhất), trả lời nó sẽ gắn
+    // vào CÙNG tầng 3 (dùng chung cha của nó), không tạo thêm tầng 4
+    const depth = getDepth(comment);
+    const effectiveParentId = depth >= 3 ? comment.parent_id : comment.id;
 
     return /* html */ `
       <article class="comment-item" data-comment-id="${comment.id}">
@@ -91,13 +101,14 @@ const CommentModule = (() => {
             <strong>${escapeHTML(userName)}</strong>
             <span>${formatTimeAgo(comment.created_at)}</span>
           </div>
-          <p class="comment-text">${escapeHTML(comment.content)}</p>
+          <p class="comment-text" id="commentText-${comment.id}">${escapeHTML(comment.content)}</p>
           <div class="comment-actions">
             <button type="button" data-reply-toggle="${comment.id}">Trả lời</button>
+            ${canEdit ? `<button type="button" data-edit-comment="${comment.id}">Sửa</button>` : ""}
             ${canDelete ? `<button type="button" class="danger" data-delete-comment="${comment.id}">Xóa</button>` : ""}
           </div>
 
-          <form class="reply-form" id="replyForm-${comment.id}" data-parent-id="${comment.id}">
+          <form class="reply-form" id="replyForm-${comment.id}" data-parent-id="${effectiveParentId}">
             <textarea class="form-control" placeholder="Viết trả lời..." required></textarea>
             <button type="submit" class="button button-primary">Gửi</button>
           </form>
@@ -105,6 +116,24 @@ const CommentModule = (() => {
           ${replies.length ? `<div class="reply-list">${replies.map((r) => renderCommentItem(r)).join("")}</div>` : ""}
         </div>
       </article>`;
+  }
+
+  // Đếm số tầng của 1 comment (gốc = tầng 1)
+  function getDepth(comment) {
+    let depth = 1;
+    let current = comment;
+    while (current.parent_id) {
+      const parent = allComments.find((c) => c.id === current.parent_id);
+      if (!parent) break;
+      depth += 1;
+      current = parent;
+    }
+    return depth;
+  }
+
+  // Còn trong 15 phút kể từ lúc đăng không
+  function isWithinEditWindow(createdAt) {
+    return Date.now() - new Date(createdAt).getTime() < 15 * 60 * 1000;
   }
 
   // ---------- 4. XỬ LÝ SỰ KIỆN ----------
@@ -120,6 +149,12 @@ const CommentModule = (() => {
     const deleteBtn = event.target.closest("[data-delete-comment]");
     if (deleteBtn) {
       deleteComment(deleteBtn.dataset.deleteComment);
+      return;
+    }
+
+    const editBtn = event.target.closest("[data-edit-comment]");
+    if (editBtn) {
+      editComment(editBtn.dataset.editComment);
     }
   }
 
@@ -151,8 +186,25 @@ const CommentModule = (() => {
     await loadComments();
   }
 
+  async function editComment(id) {
+    const comment = allComments.find((c) => c.id === id);
+    if (!comment) return;
+
+    const newContent = prompt("Sửa bình luận:", comment.content);
+    if (!newContent || newContent.trim() === "" || newContent === comment.content) return;
+
+    const { error } = await supabaseClient.from("comment").update({ content: newContent.trim() }).eq("id", id);
+
+    if (error) {
+      alert("Không sửa được bình luận: " + error.message);
+      return;
+    }
+
+    await loadComments();
+  }
+
   async function deleteComment(id) {
-    if (!confirm("Xóa bình luận này? (Các trả lời bên dưới cũng sẽ mất)")) return;
+    if (!confirm("Xóa bình luận này? (Chỉ xóa được trong 15 phút đầu và khi chưa có ai trả lời)")) return;
 
     const { error } = await supabaseClient.from("comment").delete().eq("id", id);
 

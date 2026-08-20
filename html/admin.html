@@ -101,22 +101,18 @@
             <div>
               <p class="eyebrow">QUẢN TRỊ</p>
               <h1>Quản lý Folder</h1>
-              <p>Khai báo folder khớp với bucket đã tạo sẵn trong Storage</p>
+              <p>Tạo folder mới sẽ tự động tạo luôn bucket thật trong Storage</p>
             </div>
           </div>
 
           <section class="card">
             <form id="folderForm" class="form-grid" style="padding:1.25rem;">
-              <div class="form-field">
+              <div class="form-field full">
                 <label for="folderDisplayName">Tên hiển thị</label>
                 <input class="form-control" type="text" id="folderDisplayName" placeholder="VD: Kế Toán" required>
               </div>
-              <div class="form-field">
-                <label for="folderBucketName">Tên bucket (khớp đúng tên bucket trong Storage)</label>
-                <input class="form-control" type="text" id="folderBucketName" placeholder="VD: ke-toan" required>
-              </div>
               <div class="form-field full">
-                <button type="submit" class="button button-primary">+ Thêm folder</button>
+                <button type="submit" class="button button-primary" id="folderSubmitBtn">+ Thêm folder</button>
               </div>
             </form>
             <div class="table-scroll">

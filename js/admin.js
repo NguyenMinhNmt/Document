@@ -182,8 +182,14 @@ function attachFileRowEvents(container) {
     const fileId = row.dataset.fileId;
     const storagePath = row.dataset.storagePath;
 
-    row.querySelector("[data-view-file]")?.addEventListener("click", () => openFileUrl(storagePath, false));
-    row.querySelector("[data-download-file]")?.addEventListener("click", () => openFileUrl(storagePath, true));
+    row.querySelector("[data-view-file]")?.addEventListener("click", () => {
+      const newTab = window.open("", "_blank");
+      openFileUrl(storagePath, false, newTab);
+    });
+    row.querySelector("[data-download-file]")?.addEventListener("click", () => {
+      const newTab = window.open("", "_blank");
+      openFileUrl(storagePath, true, newTab);
+    });
     row.querySelector("[data-rename-file]")?.addEventListener("click", () => renameFile(fileId, row));
     row.querySelector("[data-move-file]")?.addEventListener("click", () => moveFile(fileId));
     const toggleBtn = row.querySelector("[data-toggle-status]");
@@ -195,7 +201,7 @@ function attachFileRowEvents(container) {
   });
 }
 
-async function openFileUrl(storagePath, isDownload) {
+async function openFileUrl(storagePath, isDownload, targetWindow) {
   const bucketName = storagePath.split("/")[0];
   const pathInsideBucket = storagePath.split("/").slice(1).join("/");
   const extension = pathInsideBucket.split(".").pop().toLowerCase();
@@ -206,21 +212,23 @@ async function openFileUrl(storagePath, isDownload) {
 
   if (error) {
     showToast("Không mở được file", error.message);
+    targetWindow?.close();
     return;
   }
 
   if (isDownload) {
-    window.open(data.signedUrl, "_blank");
+    if (targetWindow) targetWindow.location.href = data.signedUrl;
+    else window.open(data.signedUrl, "_blank");
     return;
   }
 
   const officeExtensions = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"];
-  if (officeExtensions.includes(extension)) {
-    const viewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(data.signedUrl)}&embedded=true`;
-    window.open(viewerUrl, "_blank");
-  } else {
-    window.open(data.signedUrl, "_blank");
-  }
+  const finalUrl = officeExtensions.includes(extension)
+    ? `https://docs.google.com/gview?url=${encodeURIComponent(data.signedUrl)}&embedded=true`
+    : data.signedUrl;
+
+  if (targetWindow) targetWindow.location.href = finalUrl;
+  else window.open(finalUrl, "_blank");
 }
 
 async function renameFile(fileId, row) {
@@ -487,23 +495,52 @@ async function handleEditFolder(folderId) {
 
 async function handleAddFolder(event) {
   event.preventDefault();
+  const submitBtn = document.getElementById("folderSubmitBtn");
   const displayName = document.getElementById("folderDisplayName").value.trim();
-  const bucketName = document.getElementById("folderBucketName").value.trim();
-  if (!displayName || !bucketName) return;
+  if (!displayName) return;
 
-  const { error } = await supabaseClient
-    .from("folder")
-    .insert({ display_name: displayName, bucket_name: bucketName, created_by: currentUser.id });
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Đang tạo...";
 
-  if (error) {
-    if (error.message.includes("duplicate"))
-      return showToast("Không thêm được", "Tên bucket này đã được khai báo rồi.");
-    return showToast("Không thêm được folder", error.message);
+  try {
+    const bucketName = slugify(displayName);
+    if (!bucketName) throw new Error("Tên hiển thị không hợp lệ, vui lòng nhập tên khác.");
+
+    // Bước 1: gọi Edge Function tạo bucket THẬT trong Storage
+    const { data: bucketResult, error: bucketError } = await supabaseClient.functions.invoke("create-bucket", {
+      body: { bucketName },
+    });
+    if (bucketError) throw bucketError;
+    if (bucketResult?.error) throw new Error(bucketResult.error);
+
+    // Bước 2: khai báo folder trong Database, khớp đúng bucket vừa tạo
+    const { error } = await supabaseClient
+      .from("folder")
+      .insert({ display_name: displayName, bucket_name: bucketName, created_by: currentUser.id });
+    if (error) throw error;
+
+    showToast("Đã thêm folder", `"${displayName}" đã sẵn sàng để upload (đã tự tạo bucket "${bucketName}").`);
+    document.getElementById("folderForm").reset();
+    await loadFolders();
+  } catch (error) {
+    showToast("Không thêm được folder", error.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "+ Thêm folder";
   }
+}
 
-  showToast("Đã thêm folder", `"${displayName}" đã sẵn sàng để upload.`);
-  document.getElementById("folderForm").reset();
-  await loadFolders();
+// Chuyển tên tiếng Việt có dấu -> dạng "slug" hợp lệ để đặt tên bucket (vd: "Kế Toán" -> "ke-toan")
+function slugify(text) {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 async function handleDeleteFolder(folderId) {

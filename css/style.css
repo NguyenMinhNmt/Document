@@ -1155,6 +1155,72 @@ textarea.form-control {
   min-height: 38px;
 }
 
+/* ---------- 12c. LƯỚI FOLDER LƯỚT NGANG (tab Tài liệu) ---------- */
+.folder-scroll-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1.5rem;
+}
+
+.folder-scroll-track {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  flex: 1;
+  padding-bottom: 0.25rem;
+}
+
+.folder-scroll-track .stat-card {
+  min-width: 190px;
+  flex: 0 0 auto;
+}
+
+.folder-scroll-track .stat-copy strong {
+  font-size: 0.95rem;
+}
+
+.folder-scroll-track .stat-copy span {
+  font-size: 0.75rem;
+}
+
+.folder-scroll-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  color: var(--text-sub);
+}
+
+.folder-scroll-btn:hover {
+  border-color: var(--accent-1);
+  color: var(--accent-2);
+}
+
+/* Mobile: bỏ mũi tên (khó bấm trên cảm ứng), cho phép xuống dòng tự nhiên */
+@media (max-width: 640px) {
+  .folder-scroll-btn {
+    display: none !important;
+  }
+
+  .folder-scroll-track {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .folder-scroll-track .stat-card {
+    min-width: 0;
+    flex: 1 1 calc(50% - 0.5rem);
+  }
+}
+
 /* ---------- 13. RESPONSIVE ---------- */
 @media (max-width: 860px) {
   .sidebar {

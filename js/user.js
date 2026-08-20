@@ -122,7 +122,24 @@ async function loadFolders() {
   }
 
   folderList = data || [];
+  await loadFolderFileCounts();
   renderFolderGrid();
+}
+
+// Đếm số file (đang hoạt động) trong từng folder, hiện dưới tên folder
+async function loadFolderFileCounts() {
+  const results = await Promise.all(
+    folderList.map(async (folder) => {
+      const { count } = await supabaseClient
+        .from("file")
+        .select("id", { count: "exact", head: true })
+        .eq("id_folder", folder.id)
+        .eq("status", true);
+      return { id: folder.id, count: count || 0 };
+    })
+  );
+  const countMap = Object.fromEntries(results.map((r) => [r.id, r.count]));
+  folderList = folderList.map((f) => ({ ...f, fileCount: countMap[f.id] || 0 }));
 }
 
 function renderFolderGrid() {
@@ -133,8 +150,8 @@ function renderFolderGrid() {
       <article class="stat-card" data-folder-id="${folder.id}">
         <span class="stat-icon">▦</span>
         <div class="stat-copy">
-          <span>Folder</span>
           <strong>${escapeHTML(folder.display_name)}</strong>
+          <span>${folder.fileCount ?? 0} file</span>
         </div>
         <b>›</b>
       </article>`
@@ -144,7 +161,21 @@ function renderFolderGrid() {
   grid.querySelectorAll("[data-folder-id]").forEach((card) => {
     card.addEventListener("click", () => openFolder(card.dataset.folderId));
   });
+
+  // Chỉ hiện mũi tên lướt ngang khi tràn khỏi màn hình (không cần thiết thì tự ẩn)
+  const prevBtn = document.getElementById("folderPrevBtn");
+  const nextBtn = document.getElementById("folderNextBtn");
+  const canScroll = grid.scrollWidth > grid.clientWidth;
+  prevBtn.hidden = !canScroll;
+  nextBtn.hidden = !canScroll;
 }
+
+document.getElementById("folderPrevBtn").addEventListener("click", () => {
+  document.getElementById("folderGrid").scrollBy({ left: -240, behavior: "smooth" });
+});
+document.getElementById("folderNextBtn").addEventListener("click", () => {
+  document.getElementById("folderGrid").scrollBy({ left: 240, behavior: "smooth" });
+});
 
 async function openFolder(folderId) {
   currentFolderId = folderId;
@@ -152,7 +183,12 @@ async function openFolder(folderId) {
 
   document.getElementById("documentsTitle").textContent = folder.display_name;
   document.getElementById("documentsDesc").textContent = "Danh sách file trong folder này";
-  document.getElementById("folderGrid").hidden = true;
+
+  // Mobile (màn hẹp): chuyển hẳn qua màn hình file, ẩn lưới folder đi
+  // PC (màn rộng): giữ nguyên lưới folder ở trên, chỉ hiện thêm khối file bên dưới
+  const isMobile = window.innerWidth <= 640;
+  document.querySelector(".folder-scroll-wrap").hidden = isMobile;
+
   document.getElementById("fileListCard").hidden = false;
   document.getElementById("backToFoldersBtn").hidden = false;
 
@@ -163,7 +199,7 @@ document.getElementById("backToFoldersBtn").addEventListener("click", () => {
   currentFolderId = null;
   document.getElementById("documentsTitle").textContent = "Tất cả folder";
   document.getElementById("documentsDesc").textContent = "Chọn 1 folder để xem file bên trong";
-  document.getElementById("folderGrid").hidden = false;
+  document.querySelector(".folder-scroll-wrap").hidden = false;
   document.getElementById("fileListCard").hidden = true;
   document.getElementById("backToFoldersBtn").hidden = true;
 });
@@ -227,8 +263,15 @@ function attachFileRowEvents(container) {
     const fileId = row.dataset.fileId;
     const storagePath = row.dataset.storagePath;
 
-    row.querySelector("[data-view-file]")?.addEventListener("click", () => openFileUrl(storagePath, false));
-    row.querySelector("[data-download-file]")?.addEventListener("click", () => openFileUrl(storagePath, true));
+    row.querySelector("[data-view-file]")?.addEventListener("click", () => {
+      // Mở sẵn 1 tab trắng NGAY LÚC bấm (đồng bộ) để trình duyệt mobile không chặn popup
+      const newTab = window.open("", "_blank");
+      openFileUrl(storagePath, false, newTab);
+    });
+    row.querySelector("[data-download-file]")?.addEventListener("click", () => {
+      const newTab = window.open("", "_blank");
+      openFileUrl(storagePath, true, newTab);
+    });
     row.querySelector("[data-rename-file]")?.addEventListener("click", () => renameFile(fileId, row));
 
     const toggleBtn = row.querySelector("[data-toggle-status]");
@@ -239,7 +282,7 @@ function attachFileRowEvents(container) {
   });
 }
 
-async function openFileUrl(storagePath, isDownload) {
+async function openFileUrl(storagePath, isDownload, targetWindow) {
   const bucketName = storagePath.split("/")[0];
   const pathInsideBucket = storagePath.split("/").slice(1).join("/");
   const extension = pathInsideBucket.split(".").pop().toLowerCase();
@@ -250,23 +293,25 @@ async function openFileUrl(storagePath, isDownload) {
 
   if (error) {
     showToast("Không mở được file", error.message);
+    targetWindow?.close();
     return;
   }
 
   if (isDownload) {
-    window.open(data.signedUrl, "_blank");
+    if (targetWindow) targetWindow.location.href = data.signedUrl;
+    else window.open(data.signedUrl, "_blank");
     return;
   }
 
   // PDF/ảnh trình duyệt tự xem được -> mở thẳng
   // Word/Excel/PowerPoint trình duyệt KHÔNG tự xem được -> nhờ Google Docs Viewer hiển thị hộ
   const officeExtensions = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"];
-  if (officeExtensions.includes(extension)) {
-    const viewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(data.signedUrl)}&embedded=true`;
-    window.open(viewerUrl, "_blank");
-  } else {
-    window.open(data.signedUrl, "_blank");
-  }
+  const finalUrl = officeExtensions.includes(extension)
+    ? `https://docs.google.com/gview?url=${encodeURIComponent(data.signedUrl)}&embedded=true`
+    : data.signedUrl;
+
+  if (targetWindow) targetWindow.location.href = finalUrl;
+  else window.open(finalUrl, "_blank");
 }
 
 async function renameFile(fileId, row) {

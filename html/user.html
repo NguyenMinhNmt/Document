@@ -61,7 +61,11 @@
           </div>
 
           <!-- Lưới folder -->
-          <div class="stat-grid" id="folderGrid"></div>
+          <div class="folder-scroll-wrap">
+            <button class="folder-scroll-btn" id="folderPrevBtn" aria-label="Xem folder trước" hidden>‹</button>
+            <div class="folder-scroll-track" id="folderGrid"></div>
+            <button class="folder-scroll-btn" id="folderNextBtn" aria-label="Xem folder sau" hidden>›</button>
+          </div>
 
           <!-- Danh sách file trong folder đang chọn -->
           <section class="card" id="fileListCard" hidden>
