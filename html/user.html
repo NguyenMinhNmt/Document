@@ -58,7 +58,21 @@
               <p id="documentsDesc">Chọn 1 folder để xem file bên trong</p>
             </div>
             <button class="button button-secondary" id="backToFoldersBtn" hidden>← Quay lại danh sách folder</button>
+            <button class="button button-primary" id="showAddFolderBtn">+ Thêm folder</button>
           </div>
+
+          <!-- Form thêm folder mới (ẩn mặc định, hiện khi bấm nút trên) -->
+          <section class="card" id="addFolderCard" hidden style="margin-bottom:1.5rem;">
+            <form id="addFolderForm" class="form-grid" style="padding:1.25rem;">
+              <div class="form-field">
+                <label for="newFolderName">Tên folder mới</label>
+                <input class="form-control" type="text" id="newFolderName" placeholder="VD: Đồ án tốt nghiệp" required>
+              </div>
+              <div class="form-field" style="align-self:flex-end;">
+                <button type="submit" class="button button-primary" id="addFolderSubmitBtn">Tạo folder</button>
+              </div>
+            </form>
+          </section>
 
           <!-- Lưới folder -->
           <div class="folder-scroll-wrap">
@@ -227,6 +241,30 @@
 
       </div>
     </main>
+  </div>
+
+  <!-- Modal chuyển folder cho file (chọn từ danh sách, không gõ tay) -->
+  <div class="modal" id="moveFolderModal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-move-modal></div>
+    <section class="modal-dialog" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">CHUYỂN FOLDER</p>
+          <h2>Chọn folder mới cho file này</h2>
+        </div>
+        <button class="close-button" data-close-move-modal aria-label="Đóng">×</button>
+      </div>
+      <div class="form-grid single" style="padding:0 1.25rem 1.25rem;">
+        <div class="form-field">
+          <label for="moveFolderSelect">Folder đích</label>
+          <select class="form-control" id="moveFolderSelect"></select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="button button-secondary" data-close-move-modal>Hủy</button>
+        <button type="button" class="button button-primary" id="moveFolderConfirmBtn">Xác nhận chuyển</button>
+      </div>
+    </section>
   </div>
 
   <div class="toast" id="toast"><span>✓</span>

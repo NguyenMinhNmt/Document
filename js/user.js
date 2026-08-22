@@ -250,6 +250,7 @@ function renderFileRow(file) {
           <button class="action-btn" data-view-file title="Xem">👁</button>
           <button class="action-btn" data-download-file title="Tải về">⬇</button>
           ${isOwner ? `<button class="action-btn" data-rename-file title="Đổi tên">✎</button>` : ""}
+          ${isOwner ? `<button class="action-btn" data-move-file title="Đổi folder">📁</button>` : ""}
           ${isOwner
       ? `<button class="action-btn" data-toggle-status="${file.status}" title="${file.status ? "Ẩn file" : "Hiện lại file"}">${file.status ? "🚫" : "↺"}</button>`
       : ""}
@@ -273,6 +274,7 @@ function attachFileRowEvents(container) {
       openFileUrl(storagePath, true, newTab);
     });
     row.querySelector("[data-rename-file]")?.addEventListener("click", () => renameFile(fileId, row));
+    row.querySelector("[data-move-file]")?.addEventListener("click", () => openMoveFolderModal(fileId));
 
     const toggleBtn = row.querySelector("[data-toggle-status]");
     if (toggleBtn) {
@@ -332,6 +334,102 @@ async function renameFile(fileId, row) {
   await logHistory(fileId, "Đã sửa");
   showToast("Đã đổi tên file", "");
   if (currentFolderId) await loadFilesInFolder(currentFolderId);
+}
+
+// ---------- CHUYỂN FOLDER CHO FILE (chọn từ danh sách, không gõ tay) ----------
+let movingFileId = null;
+
+function openMoveFolderModal(fileId) {
+  movingFileId = fileId;
+  const select = document.getElementById("moveFolderSelect");
+  select.innerHTML = folderList.map((f) => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join("");
+  document.getElementById("moveFolderModal").classList.add("open");
+}
+
+function closeMoveFolderModal() {
+  document.getElementById("moveFolderModal").classList.remove("open");
+  movingFileId = null;
+}
+
+document.querySelectorAll("[data-close-move-modal]").forEach((el) => {
+  el.addEventListener("click", closeMoveFolderModal);
+});
+
+document.getElementById("moveFolderConfirmBtn").addEventListener("click", async () => {
+  if (!movingFileId) return;
+  const newFolderId = document.getElementById("moveFolderSelect").value;
+
+  const { error } = await supabaseClient
+    .from("file")
+    .update({ id_folder: newFolderId, updated_at: new Date().toISOString() })
+    .eq("id", movingFileId);
+
+  if (error) {
+    showToast("Không chuyển được folder", error.message);
+    return;
+  }
+
+  await logHistory(movingFileId, "Đã sửa");
+  showToast("Đã chuyển folder", "");
+  closeMoveFolderModal();
+  if (currentFolderId) await loadFilesInFolder(currentFolderId);
+});
+
+// ---------- THÊM FOLDER MỚI (User cũng làm được, không riêng Admin) ----------
+document.getElementById("showAddFolderBtn").addEventListener("click", () => {
+  const card = document.getElementById("addFolderCard");
+  card.hidden = !card.hidden;
+});
+
+document.getElementById("addFolderForm").addEventListener("submit", handleAddFolder);
+
+async function handleAddFolder(event) {
+  event.preventDefault();
+  const submitBtn = document.getElementById("addFolderSubmitBtn");
+  const displayName = document.getElementById("newFolderName").value.trim();
+  if (!displayName) return;
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Đang tạo...";
+
+  try {
+    const bucketName = slugify(displayName);
+    if (!bucketName) throw new Error("Tên folder không hợp lệ, vui lòng nhập tên khác.");
+
+    const { data: bucketResult, error: bucketError } = await supabaseClient.functions.invoke("create-bucket", {
+      body: { bucketName },
+    });
+    if (bucketError) throw bucketError;
+    if (bucketResult?.error) throw new Error(bucketResult.error);
+
+    const { error } = await supabaseClient
+      .from("folder")
+      .insert({ display_name: displayName, bucket_name: bucketName, created_by: currentUser.id });
+    if (error) throw error;
+
+    showToast("Đã tạo folder", `"${displayName}" đã sẵn sàng để upload.`);
+    document.getElementById("addFolderForm").reset();
+    document.getElementById("addFolderCard").hidden = true;
+    await loadFolders();
+  } catch (error) {
+    showToast("Không tạo được folder", error.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Tạo folder";
+  }
+}
+
+// Chuyển tên tiếng Việt có dấu -> dạng "slug" hợp lệ để đặt tên bucket
+function slugify(text) {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 async function toggleFileStatus(fileId, currentStatus) {

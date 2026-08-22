@@ -9,12 +9,18 @@ const elTabLoginBtn = document.getElementById("tabLoginBtn");
 const elTabRegisterBtn = document.getElementById("tabRegisterBtn");
 const elLoginForm = document.getElementById("loginForm");
 const elRegisterForm = document.getElementById("registerForm");
+const elForgotStep1Form = document.getElementById("forgotStep1Form");
+const elForgotStep2Form = document.getElementById("forgotStep2Form");
 const elAuthMessage = document.getElementById("authMessage");
 const elLoginSubmitBtn = document.getElementById("loginSubmitBtn");
 const elRegisterSubmitBtn = document.getElementById("registerSubmitBtn");
+const elForgotPasswordLink = document.getElementById("forgotPasswordLink");
+const elBackToLoginFromForgot1 = document.getElementById("backToLoginFromForgot1");
 
 const elAuthContact = document.getElementById("authContact");
 const elAuthContactList = document.getElementById("authContactList");
+
+let forgotEmailCache = ""; // ghi nhớ email đang xác nhận OTP giữa bước 1 -> bước 2
 
 // ---------- 2. KHỞI CHẠY KHI VÀO TRANG ----------
 bootstrapAuthPage();
@@ -57,20 +63,23 @@ async function loadContactInfo() {
 }
 
 // ---------- 3. GẮN SỰ KIỆN ----------
-elTabLoginBtn.addEventListener("click", () => switchTab("login"));
-elTabRegisterBtn.addEventListener("click", () => switchTab("register"));
+elTabLoginBtn.addEventListener("click", () => showAuthView("login"));
+elTabRegisterBtn.addEventListener("click", () => showAuthView("register"));
 elLoginForm.addEventListener("submit", handleLogin);
 elRegisterForm.addEventListener("submit", handleRegister);
+elForgotPasswordLink.addEventListener("click", () => showAuthView("forgot1"));
+elBackToLoginFromForgot1.addEventListener("click", () => showAuthView("login"));
+elForgotStep1Form.addEventListener("submit", handleForgotStep1);
+elForgotStep2Form.addEventListener("submit", handleForgotStep2);
 
-// ---------- 4. CHUYỂN TAB ĐĂNG NHẬP / ĐĂNG KÝ ----------
-function switchTab(tab) {
-  const isLogin = tab === "login";
-
-  elTabLoginBtn.classList.toggle("active", isLogin);
-  elTabRegisterBtn.classList.toggle("active", !isLogin);
-  elLoginForm.classList.toggle("active", isLogin);
-  elRegisterForm.classList.toggle("active", !isLogin);
-
+// ---------- 4. CHUYỂN GIỮA CÁC MÀN: Đăng nhập / Đăng ký / Quên mật khẩu (2 bước) ----------
+function showAuthView(view) {
+  elTabLoginBtn.classList.toggle("active", view === "login");
+  elTabRegisterBtn.classList.toggle("active", view === "register");
+  elLoginForm.classList.toggle("active", view === "login");
+  elRegisterForm.classList.toggle("active", view === "register");
+  elForgotStep1Form.classList.toggle("active", view === "forgot1");
+  elForgotStep2Form.classList.toggle("active", view === "forgot2");
   hideMessage();
 }
 
@@ -129,7 +138,7 @@ async function handleLogin(event) {
       .eq("id", authData.user.id);
 
     showMessage("Đăng nhập thành công, đang chuyển hướng...", "success");
-    window.location.href = profile.is_admin ? "/html/admin.html" : "/html/user.html";
+    window.location.href = profile.is_admin ? "admin.html" : "user.html";
   } catch (error) {
     showMessage(translateAuthError(error), "error");
   } finally {
@@ -137,7 +146,7 @@ async function handleLogin(event) {
   }
 }
 
-// ---------- 6. XỬ LÝ ĐĂNG KÝ ----------
+// ---------- 6. XỬ LÝ ĐĂNG KÝ (qua Edge Function, tự động xác nhận email luôn) ----------
 async function handleRegister(event) {
   event.preventDefault();
   hideMessage();
@@ -148,28 +157,94 @@ async function handleRegister(event) {
   const password = document.getElementById("registerPassword").value;
 
   try {
-    const { data, error } = await supabaseClient.auth.signUp({ email, password });
-    if (error) throw error;
+    const { data, error } = await supabaseClient.functions.invoke("register-user", {
+      body: { email, password, userName },
+    });
 
-    // Trigger "on_auth_user_created" bên Supabase đã tự tạo dòng trong bảng "user".
-    // Ở đây mình cập nhật thêm user_name mà lúc đăng ký người dùng nhập vào.
-    if (data.user) {
-      await supabaseClient
-        .from("user")
-        .update({ user_name: userName })
-        .eq("id", data.user.id);
-    }
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
 
     showMessage(
       "Tạo tài khoản thành công! Tài khoản cần Admin duyệt trước khi đăng nhập được.",
       "success"
     );
     elRegisterForm.reset();
-    setTimeout(() => switchTab("login"), 1800);
+    setTimeout(() => showAuthView("login"), 1800);
   } catch (error) {
     showMessage(translateAuthError(error), "error");
   } finally {
     setLoading(elRegisterSubmitBtn, false, "Tạo tài khoản");
+  }
+}
+
+// ---------- 6b. XỬ LÝ QUÊN MẬT KHẨU - BƯỚC 1: xác nhận username+email khớp, gửi mã OTP ----------
+async function handleForgotStep1(event) {
+  event.preventDefault();
+  hideMessage();
+  const submitBtn = document.getElementById("forgotStep1Btn");
+  setLoading(submitBtn, true, "Đang gửi mã...");
+
+  const userName = document.getElementById("forgotUserName").value.trim();
+  const email = document.getElementById("forgotEmail").value.trim();
+
+  try {
+    const { data, error } = await supabaseClient.functions.invoke("verify-username-email", {
+      body: { userName, email },
+    });
+    if (error) throw error;
+    if (!data?.valid) throw new Error("Tên đăng nhập và email không khớp với bất kỳ tài khoản nào.");
+
+    // Nhờ Supabase Auth gửi mã OTP qua email (không tạo tài khoản mới nếu chưa tồn tại)
+    const { error: otpError } = await supabaseClient.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: false },
+    });
+    if (otpError) throw otpError;
+
+    forgotEmailCache = email;
+    showMessage("Đã gửi mã xác nhận tới email của bạn. Mã có hiệu lực trong 5 phút.", "success");
+    showAuthView("forgot2");
+  } catch (error) {
+    showMessage(error.message || "Có lỗi xảy ra, vui lòng thử lại.", "error");
+  } finally {
+    setLoading(submitBtn, false, "Gửi mã xác nhận");
+  }
+}
+
+// ---------- 6c. XỬ LÝ QUÊN MẬT KHẨU - BƯỚC 2: xác nhận mã OTP + đặt mật khẩu mới ----------
+async function handleForgotStep2(event) {
+  event.preventDefault();
+  hideMessage();
+  const submitBtn = document.getElementById("forgotStep2Btn");
+  setLoading(submitBtn, true, "Đang xác nhận...");
+
+  const otp = document.getElementById("forgotOtp").value.trim();
+  const newPassword = document.getElementById("forgotNewPassword").value;
+  const confirmPassword = document.getElementById("forgotConfirmPassword").value;
+
+  try {
+    if (newPassword !== confirmPassword) throw new Error("Mật khẩu nhập lại không khớp.");
+    if (newPassword.length < 6) throw new Error("Mật khẩu cần tối thiểu 6 ký tự.");
+    if (!forgotEmailCache) throw new Error("Phiên xác nhận đã hết hạn, vui lòng bắt đầu lại.");
+
+    // Xác nhận mã OTP - nếu đúng và còn hạn (5 phút), Supabase tự đăng nhập luôn (tạo session)
+    const { data, error } = await supabaseClient.auth.verifyOtp({
+      email: forgotEmailCache,
+      token: otp,
+      type: "email",
+    });
+    if (error) throw new Error("Mã xác nhận không đúng hoặc đã hết hạn.");
+
+    // Đã có session hợp lệ -> đặt mật khẩu mới ngay
+    const { error: updateError } = await supabaseClient.auth.updateUser({ password: newPassword });
+    if (updateError) throw updateError;
+
+    showMessage("Đặt lại mật khẩu thành công! Đang chuyển hướng...", "success");
+    await redirectByRole(data.user.id);
+  } catch (error) {
+    showMessage(error.message || "Có lỗi xảy ra, vui lòng thử lại.", "error");
+  } finally {
+    setLoading(submitBtn, false, "Đặt lại mật khẩu");
   }
 }
 
@@ -183,7 +258,7 @@ async function redirectByRole(userId) {
 
   if (!profile || !profile.status) return; // chưa được duyệt -> ở lại trang login
 
-  window.location.href = profile.is_admin ? "/html/admin.html" : "/html/user.html";
+  window.location.href = profile.is_admin ? "admin.html" : "user.html";
 }
 
 // ---------- 8. HÀM TIỆN ÍCH ----------

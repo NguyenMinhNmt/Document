@@ -45,6 +45,10 @@
         <button type="submit" class="button button-primary" id="loginSubmitBtn" style="justify-content:center;">
           Đăng nhập
         </button>
+        <button type="button" id="forgotPasswordLink"
+          style="background:none;border:none;color:var(--accent-2);font-size:0.8rem;margin-top:0.9rem;cursor:pointer;width:100%;text-align:center;">
+          Quên mật khẩu?
+        </button>
       </form>
 
       <!-- FORM ĐĂNG KÝ -->
@@ -65,6 +69,46 @@
         </div>
         <button type="submit" class="button button-primary" id="registerSubmitBtn" style="justify-content:center;">
           Tạo tài khoản
+        </button>
+      </form>
+
+      <!-- FORM QUÊN MẬT KHẨU - BƯỚC 1: xác nhận username + email -->
+      <form class="auth-form" id="forgotStep1Form">
+        <div class="form-field">
+          <label for="forgotUserName">Tên đăng nhập</label>
+          <input class="form-control" type="text" id="forgotUserName" placeholder="Tên đăng nhập của bạn" required>
+        </div>
+        <div class="form-field">
+          <label for="forgotEmail">Email đã đăng ký</label>
+          <input class="form-control" type="email" id="forgotEmail" placeholder="ban@email.com" required>
+        </div>
+        <button type="submit" class="button button-primary" id="forgotStep1Btn" style="justify-content:center;">
+          Gửi mã xác nhận
+        </button>
+        <button type="button" id="backToLoginFromForgot1"
+          style="background:none;border:none;color:var(--text-sub);font-size:0.8rem;margin-top:0.6rem;cursor:pointer;width:100%;text-align:center;">
+          ← Quay lại đăng nhập
+        </button>
+      </form>
+
+      <!-- FORM QUÊN MẬT KHẨU - BƯỚC 2: nhập mã OTP + đặt mật khẩu mới -->
+      <form class="auth-form" id="forgotStep2Form">
+        <div class="form-field">
+          <label for="forgotOtp">Mã xác nhận (đã gửi qua email, hiệu lực 5 phút)</label>
+          <input class="form-control" type="text" id="forgotOtp" placeholder="Nhập mã trong email" required>
+        </div>
+        <div class="form-field">
+          <label for="forgotNewPassword">Mật khẩu mới</label>
+          <input class="form-control" type="password" id="forgotNewPassword" placeholder="Tối thiểu 6 ký tự"
+            minlength="6" required>
+        </div>
+        <div class="form-field">
+          <label for="forgotConfirmPassword">Nhập lại mật khẩu mới</label>
+          <input class="form-control" type="password" id="forgotConfirmPassword" placeholder="Nhập lại mật khẩu mới"
+            required>
+        </div>
+        <button type="submit" class="button button-primary" id="forgotStep2Btn" style="justify-content:center;">
+          Đặt lại mật khẩu
         </button>
       </form>
 

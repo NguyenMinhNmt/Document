@@ -191,7 +191,7 @@ function attachFileRowEvents(container) {
       openFileUrl(storagePath, true, newTab);
     });
     row.querySelector("[data-rename-file]")?.addEventListener("click", () => renameFile(fileId, row));
-    row.querySelector("[data-move-file]")?.addEventListener("click", () => moveFile(fileId));
+    row.querySelector("[data-move-file]")?.addEventListener("click", () => openMoveFolderModal(fileId));
     const toggleBtn = row.querySelector("[data-toggle-status]");
     if (toggleBtn) {
       const currentStatus = toggleBtn.dataset.toggleStatus === "true";
@@ -248,25 +248,44 @@ async function renameFile(fileId, row) {
   await loadFiles();
 }
 
-async function moveFile(fileId) {
-  const folderNames = folderList.map((f) => f.display_name).join(", ");
-  const input = prompt(`Nhập đúng tên folder muốn chuyển tới:\n(Các folder có sẵn: ${folderNames})`);
-  if (!input) return;
+let movingFileId = null;
 
-  const target = folderList.find((f) => f.display_name.toLowerCase() === input.trim().toLowerCase());
-  if (!target) return showToast("Không tìm thấy folder", "Vui lòng gõ đúng tên folder có sẵn.");
+function openMoveFolderModal(fileId) {
+  movingFileId = fileId;
+  const select = document.getElementById("moveFolderSelect");
+  select.innerHTML = folderList.map((f) => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join("");
+  document.getElementById("moveFolderModal").classList.add("open");
+}
+
+function closeMoveFolderModal() {
+  document.getElementById("moveFolderModal").classList.remove("open");
+  movingFileId = null;
+}
+
+document.querySelectorAll("[data-close-move-modal]").forEach((el) => {
+  el.addEventListener("click", closeMoveFolderModal);
+});
+
+document.getElementById("moveFolderConfirmBtn").addEventListener("click", async () => {
+  if (!movingFileId) return;
+  const newFolderId = document.getElementById("moveFolderSelect").value;
+  const target = folderList.find((f) => f.id === newFolderId);
 
   const { error } = await supabaseClient
     .from("file")
-    .update({ id_folder: target.id, updated_at: new Date().toISOString() })
-    .eq("id", fileId);
+    .update({ id_folder: newFolderId, updated_at: new Date().toISOString() })
+    .eq("id", movingFileId);
 
-  if (error) return showToast("Không đổi được folder", error.message);
+  if (error) {
+    showToast("Không đổi được folder", error.message);
+    return;
+  }
 
-  await logHistory(fileId, "Đã sửa");
-  showToast("Đã chuyển folder", `Chuyển sang "${target.display_name}"`);
+  await logHistory(movingFileId, "Đã sửa");
+  showToast("Đã chuyển folder", `Chuyển sang "${target?.display_name}"`);
+  closeMoveFolderModal();
   await loadFiles();
-}
+});
 
 async function toggleFileStatus(fileId, currentStatus) {
   const newStatus = !currentStatus;

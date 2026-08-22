@@ -322,6 +322,30 @@
     </main>
   </div>
 
+  <!-- Modal chuyển folder cho file (chọn từ danh sách, không gõ tay) -->
+  <div class="modal" id="moveFolderModal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-move-modal></div>
+    <section class="modal-dialog" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">CHUYỂN FOLDER</p>
+          <h2>Chọn folder mới cho file này</h2>
+        </div>
+        <button class="close-button" data-close-move-modal aria-label="Đóng">×</button>
+      </div>
+      <div class="form-grid single" style="padding:0 1.25rem 1.25rem;">
+        <div class="form-field">
+          <label for="moveFolderSelect">Folder đích</label>
+          <select class="form-control" id="moveFolderSelect"></select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="button button-secondary" data-close-move-modal>Hủy</button>
+        <button type="button" class="button button-primary" id="moveFolderConfirmBtn">Xác nhận chuyển</button>
+      </div>
+    </section>
+  </div>
+
   <div class="toast" id="toast"><span>✓</span>
     <div><strong id="toastTitle">Thành công</strong>
       <p id="toastMessage"></p>
