@@ -583,8 +583,31 @@ const originalLoadFolders = loadFolders;
 loadFolders = async function () {
   await originalLoadFolders();
   const select = document.getElementById("uploadFolder");
-  select.innerHTML = `<option value="">-- Chọn folder --</option>` + buildFolderOptionsHTML();
+  const roots = folderList.filter((f) => !f.parent_id);
+  select.innerHTML =
+    `<option value="">-- Chọn folder --</option>` +
+    roots.map((f) => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join("");
+  document.getElementById("uploadSubfolderWrap").hidden = true;
 };
+
+// Khi đổi Folder cha ở tab Upload -> hiện thêm ô Folder con NẾU folder đó có con
+document.getElementById("uploadFolder").addEventListener("change", (event) => {
+  const parentId = event.target.value;
+  const wrap = document.getElementById("uploadSubfolderWrap");
+  const select = document.getElementById("uploadSubfolder");
+  const subfolders = folderList.filter((f) => f.parent_id === parentId);
+
+  if (!parentId || subfolders.length === 0) {
+    wrap.hidden = true;
+    select.value = "";
+    return;
+  }
+
+  select.innerHTML =
+    `<option value="">-- Không, để ở folder cha --</option>` +
+    subfolders.map((f) => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join("");
+  wrap.hidden = false;
+});
 
 // Xây danh sách option cho dropdown, folder con thụt vào để phân biệt với folder cha
 function buildFolderOptionsHTML() {
@@ -608,7 +631,10 @@ async function handleUpload(event) {
   submitBtn.textContent = "Đang tải lên...";
 
   try {
-    const folderId = document.getElementById("uploadFolder").value;
+    // Nếu có chọn Folder con -> upload vào đó; không thì upload vào Folder cha
+    const parentFolderId = document.getElementById("uploadFolder").value;
+    const subfolderId = document.getElementById("uploadSubfolder").value;
+    const folderId = subfolderId || parentFolderId;
     const folder = folderList.find((f) => f.id === folderId);
     const fileInput = document.getElementById("uploadFile");
     const rawFile = fileInput.files[0];
@@ -649,6 +675,7 @@ async function handleUpload(event) {
 
     showToast("Tải lên thành công", `File "${displayName}" đã được lưu.`);
     document.getElementById("uploadForm").reset();
+    document.getElementById("uploadSubfolderWrap").hidden = true;
     searchDataLoaded = false; // để lần sau vào tab Tìm kiếm sẽ tải lại danh sách mới
   } catch (error) {
     showToast("Tải lên thất bại", error.message || "Vui lòng thử lại.");
