@@ -81,6 +81,27 @@
             <button class="folder-scroll-btn" id="folderNextBtn" aria-label="Xem folder sau" hidden>›</button>
           </div>
 
+          <!-- Khu vực folder CON của folder cha đang mở (chỉ hiện khi đang ở trong 1 folder cha) -->
+          <section class="card" id="subfolderSection" hidden style="margin-bottom:1.5rem;">
+            <div class="card-header">
+              <div>
+                <h2>Folder con</h2>
+                <p>Bấm vào để xem file bên trong, hoặc thêm folder con mới</p>
+              </div>
+              <button class="button button-secondary" id="showAddSubfolderBtn">+ Thêm folder con</button>
+            </div>
+            <form id="addSubfolderForm" class="form-grid" style="padding:0 1.25rem 1.25rem;" hidden>
+              <div class="form-field">
+                <label for="newSubfolderName">Tên folder con mới</label>
+                <input class="form-control" type="text" id="newSubfolderName" placeholder="VD: Chương 1" required>
+              </div>
+              <div class="form-field" style="align-self:flex-end;">
+                <button type="submit" class="button button-primary" id="addSubfolderSubmitBtn">Tạo folder con</button>
+              </div>
+            </form>
+            <div class="stat-grid" id="subfolderGrid" style="padding:0 1.25rem 1.25rem;"></div>
+          </section>
+
           <!-- Danh sách file trong folder đang chọn -->
           <section class="card" id="fileListCard" hidden>
             <div class="table-toolbar">

@@ -253,7 +253,7 @@ let movingFileId = null;
 function openMoveFolderModal(fileId) {
   movingFileId = fileId;
   const select = document.getElementById("moveFolderSelect");
-  select.innerHTML = folderList.map((f) => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join("");
+  select.innerHTML = buildFolderOptionsHTML();
   document.getElementById("moveFolderModal").classList.add("open");
 }
 
@@ -452,7 +452,7 @@ document.getElementById("uploadForm").addEventListener("submit", handleUpload);
 async function loadFolders() {
   const { data, error } = await supabaseClient
     .from("folder")
-    .select("id, display_name, bucket_name")
+    .select("id, display_name, bucket_name, parent_id")
     .order("display_name");
 
   if (error) return showToast("Không tải được folder", error.message);
@@ -460,11 +460,35 @@ async function loadFolders() {
   folderList = data || [];
 
   const select = document.getElementById("uploadFolder");
-  select.innerHTML =
-    `<option value="">-- Chọn folder --</option>` +
-    folderList.map((f) => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join("");
+  select.innerHTML = `<option value="">-- Chọn folder --</option>` + buildFolderOptionsHTML();
 
   renderFolderManageList();
+  refreshFolderParentSelect();
+}
+
+// Xây danh sách option cho dropdown, folder con thụt vào để phân biệt với folder cha
+function buildFolderOptionsHTML() {
+  const roots = folderList.filter((f) => !f.parent_id);
+  let html = "";
+  roots.forEach((root) => {
+    html += `<option value="${root.id}">${escapeHTML(root.display_name)}</option>`;
+    folderList
+      .filter((f) => f.parent_id === root.id)
+      .forEach((sub) => {
+        html += `<option value="${sub.id}">— ${escapeHTML(sub.display_name)}</option>`;
+      });
+  });
+  return html;
+}
+
+// Đổ danh sách folder GỐC vào ô "Folder cha (tùy chọn)" trong form thêm folder
+function refreshFolderParentSelect() {
+  const select = document.getElementById("folderParentSelect");
+  if (!select) return;
+  const roots = folderList.filter((f) => !f.parent_id);
+  select.innerHTML =
+    `<option value="">-- Không có, đây là folder gốc --</option>` +
+    roots.map((f) => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join("");
 }
 
 // ---------- Quản lý Folder (thêm / xóa) ----------
@@ -472,21 +496,16 @@ document.getElementById("folderForm").addEventListener("submit", handleAddFolder
 
 function renderFolderManageList() {
   const body = document.getElementById("folderManageBody");
-  body.innerHTML = folderList
-    .map(
-      (f) => /* html */ `
-      <tr data-folder-id="${f.id}">
-        <td>${escapeHTML(f.display_name)}</td>
-        <td>${escapeHTML(f.bucket_name)}</td>
-        <td>
-          <div class="actions">
-            <button class="action-btn" data-edit-folder="${f.id}" title="Sửa tên">✎</button>
-            <button class="action-btn delete" data-delete-folder="${f.id}" title="Xóa">⌫</button>
-          </div>
-        </td>
-      </tr>`
-    )
-    .join("");
+  const roots = folderList.filter((f) => !f.parent_id);
+
+  let html = "";
+  roots.forEach((root) => {
+    html += renderFolderManageRow(root, false);
+    folderList.filter((f) => f.parent_id === root.id).forEach((sub) => {
+      html += renderFolderManageRow(sub, true);
+    });
+  });
+  body.innerHTML = html;
 
   body.querySelectorAll("[data-edit-folder]").forEach((btn) => {
     btn.addEventListener("click", () => handleEditFolder(btn.dataset.editFolder));
@@ -494,6 +513,20 @@ function renderFolderManageList() {
   body.querySelectorAll("[data-delete-folder]").forEach((btn) => {
     btn.addEventListener("click", () => handleDeleteFolder(btn.dataset.deleteFolder));
   });
+}
+
+function renderFolderManageRow(f, isSub) {
+  return /* html */ `
+      <tr data-folder-id="${f.id}">
+        <td>${isSub ? "— " : ""}${escapeHTML(f.display_name)}</td>
+        <td>${escapeHTML(f.bucket_name)}</td>
+        <td>
+          <div class="actions">
+            <button class="action-btn" data-edit-folder="${f.id}" title="Sửa tên">✎</button>
+            <button class="action-btn delete" data-delete-folder="${f.id}" title="Xóa">⌫</button>
+          </div>
+        </td>
+      </tr>`;
 }
 
 async function handleEditFolder(folderId) {
@@ -516,29 +549,44 @@ async function handleAddFolder(event) {
   event.preventDefault();
   const submitBtn = document.getElementById("folderSubmitBtn");
   const displayName = document.getElementById("folderDisplayName").value.trim();
+  const parentId = document.getElementById("folderParentSelect")?.value || null;
   if (!displayName) return;
 
   submitBtn.disabled = true;
   submitBtn.textContent = "Đang tạo...";
 
   try {
-    const bucketName = slugify(displayName);
-    if (!bucketName) throw new Error("Tên hiển thị không hợp lệ, vui lòng nhập tên khác.");
+    if (parentId) {
+      // Folder CON: dùng chung bucket với folder cha, không cần tạo bucket mới
+      const parentFolder = folderList.find((f) => f.id === parentId);
+      const { error } = await supabaseClient.from("folder").insert({
+        display_name: displayName,
+        bucket_name: parentFolder.bucket_name,
+        parent_id: parentId,
+        created_by: currentUser.id,
+      });
+      if (error) throw error;
 
-    // Bước 1: gọi Edge Function tạo bucket THẬT trong Storage
-    const { data: bucketResult, error: bucketError } = await supabaseClient.functions.invoke("create-bucket", {
-      body: { bucketName },
-    });
-    if (bucketError) throw bucketError;
-    if (bucketResult?.error) throw new Error(bucketResult.error);
+      showToast("Đã thêm folder con", `"${displayName}" đã sẵn sàng để upload.`);
+    } else {
+      // Folder GỐC: cần tạo bucket thật riêng
+      const bucketName = slugify(displayName);
+      if (!bucketName) throw new Error("Tên hiển thị không hợp lệ, vui lòng nhập tên khác.");
 
-    // Bước 2: khai báo folder trong Database, khớp đúng bucket vừa tạo
-    const { error } = await supabaseClient
-      .from("folder")
-      .insert({ display_name: displayName, bucket_name: bucketName, created_by: currentUser.id });
-    if (error) throw error;
+      const { data: bucketResult, error: bucketError } = await supabaseClient.functions.invoke("create-bucket", {
+        body: { bucketName },
+      });
+      if (bucketError) throw bucketError;
+      if (bucketResult?.error) throw new Error(bucketResult.error);
 
-    showToast("Đã thêm folder", `"${displayName}" đã sẵn sàng để upload (đã tự tạo bucket "${bucketName}").`);
+      const { error } = await supabaseClient
+        .from("folder")
+        .insert({ display_name: displayName, bucket_name: bucketName, created_by: currentUser.id });
+      if (error) throw error;
+
+      showToast("Đã thêm folder", `"${displayName}" đã sẵn sàng để upload (đã tự tạo bucket "${bucketName}").`);
+    }
+
     document.getElementById("folderForm").reset();
     await loadFolders();
   } catch (error) {
@@ -563,7 +611,12 @@ function slugify(text) {
 }
 
 async function handleDeleteFolder(folderId) {
-  if (!confirm("Xóa folder này? Chỉ xóa được nếu folder không còn chứa file nào.")) return;
+  const folder = folderList.find((f) => f.id === folderId);
+  const hasChildren = !folder?.parent_id && folderList.some((f) => f.parent_id === folderId);
+  const warning = hasChildren ? " Folder con bên trong cũng sẽ bị xóa theo." : "";
+
+  if (!confirm(`Xóa folder này? Chỉ xóa được nếu folder (và folder con, nếu có) không còn chứa file nào.${warning}`))
+    return;
 
   const { error } = await supabaseClient.from("folder").delete().eq("id", folderId);
 

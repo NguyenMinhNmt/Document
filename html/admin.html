@@ -107,9 +107,15 @@
 
           <section class="card">
             <form id="folderForm" class="form-grid" style="padding:1.25rem;">
-              <div class="form-field full">
+              <div class="form-field">
                 <label for="folderDisplayName">Tên hiển thị</label>
                 <input class="form-control" type="text" id="folderDisplayName" placeholder="VD: Kế Toán" required>
+              </div>
+              <div class="form-field">
+                <label for="folderParentSelect">Folder cha (tùy chọn - để trống nếu đây là folder gốc)</label>
+                <select class="form-control" id="folderParentSelect">
+                  <option value="">-- Không có, đây là folder gốc --</option>
+                </select>
               </div>
               <div class="form-field full">
                 <button type="submit" class="button button-primary" id="folderSubmitBtn">+ Thêm folder</button>

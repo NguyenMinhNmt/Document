@@ -113,7 +113,7 @@ function restorePageFromHash() {
 async function loadFolders() {
   const { data, error } = await supabaseClient
     .from("folder")
-    .select("id, display_name, bucket_name")
+    .select("id, display_name, bucket_name, parent_id")
     .order("display_name");
 
   if (error) {
@@ -144,7 +144,9 @@ async function loadFolderFileCounts() {
 
 function renderFolderGrid() {
   const grid = document.getElementById("folderGrid");
-  grid.innerHTML = folderList
+  const rootFolders = folderList.filter((f) => !f.parent_id);
+
+  grid.innerHTML = rootFolders
     .map(
       (folder) => /* html */ `
       <article class="stat-card" data-folder-id="${folder.id}">
@@ -180,14 +182,26 @@ document.getElementById("folderNextBtn").addEventListener("click", () => {
 async function openFolder(folderId) {
   currentFolderId = folderId;
   const folder = folderList.find((f) => f.id === folderId);
+  const isRootFolder = !folder.parent_id;
 
   document.getElementById("documentsTitle").textContent = folder.display_name;
-  document.getElementById("documentsDesc").textContent = "Danh sách file trong folder này";
+  document.getElementById("documentsDesc").textContent = isRootFolder
+    ? "Folder con (nếu có) và file trực tiếp trong folder này"
+    : "Danh sách file trong folder con này";
 
   // Mobile (màn hẹp): chuyển hẳn qua màn hình file, ẩn lưới folder đi
   // PC (màn rộng): giữ nguyên lưới folder ở trên, chỉ hiện thêm khối file bên dưới
   const isMobile = window.innerWidth <= 640;
   document.querySelector(".folder-scroll-wrap").hidden = isMobile;
+
+  // Folder con chỉ có ở CẤP 1 (folder gốc) - nếu đang mở 1 folder con rồi thì không hiện khu vực này nữa
+  const subfolderSection = document.getElementById("subfolderSection");
+  if (isRootFolder) {
+    subfolderSection.hidden = false;
+    renderSubfolderGrid(folderId);
+  } else {
+    subfolderSection.hidden = true;
+  }
 
   document.getElementById("fileListCard").hidden = false;
   document.getElementById("backToFoldersBtn").hidden = false;
@@ -200,9 +214,80 @@ document.getElementById("backToFoldersBtn").addEventListener("click", () => {
   document.getElementById("documentsTitle").textContent = "Tất cả folder";
   document.getElementById("documentsDesc").textContent = "Chọn 1 folder để xem file bên trong";
   document.querySelector(".folder-scroll-wrap").hidden = false;
+  document.getElementById("subfolderSection").hidden = true;
+  document.getElementById("addSubfolderForm").hidden = true;
   document.getElementById("fileListCard").hidden = true;
   document.getElementById("backToFoldersBtn").hidden = true;
 });
+
+// ---------- FOLDER CON (1 cấp, dùng chung bucket với folder cha) ----------
+function renderSubfolderGrid(parentId) {
+  const grid = document.getElementById("subfolderGrid");
+  const subfolders = folderList.filter((f) => f.parent_id === parentId);
+
+  if (subfolders.length === 0) {
+    grid.innerHTML = `<p style="color:var(--text-sub);font-size:0.85rem;">Chưa có folder con nào.</p>`;
+    return;
+  }
+
+  grid.innerHTML = subfolders
+    .map(
+      (folder) => /* html */ `
+      <article class="stat-card" data-folder-id="${folder.id}">
+        <span class="stat-icon">📁</span>
+        <div class="stat-copy">
+          <strong>${escapeHTML(folder.display_name)}</strong>
+          <span>${folder.fileCount ?? 0} file</span>
+        </div>
+        <b>›</b>
+      </article>`
+    )
+    .join("");
+
+  grid.querySelectorAll("[data-folder-id]").forEach((card) => {
+    card.addEventListener("click", () => openFolder(card.dataset.folderId));
+  });
+}
+
+document.getElementById("showAddSubfolderBtn").addEventListener("click", () => {
+  const form = document.getElementById("addSubfolderForm");
+  form.hidden = !form.hidden;
+});
+
+document.getElementById("addSubfolderForm").addEventListener("submit", handleAddSubfolder);
+
+async function handleAddSubfolder(event) {
+  event.preventDefault();
+  const submitBtn = document.getElementById("addSubfolderSubmitBtn");
+  const displayName = document.getElementById("newSubfolderName").value.trim();
+  if (!displayName || !currentFolderId) return;
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Đang tạo...";
+
+  try {
+    const parentFolder = folderList.find((f) => f.id === currentFolderId);
+    // Folder con dùng CHUNG bucket với folder cha -> không cần gọi Edge Function tạo bucket mới
+    const { error } = await supabaseClient.from("folder").insert({
+      display_name: displayName,
+      bucket_name: parentFolder.bucket_name,
+      parent_id: currentFolderId,
+      created_by: currentUser.id,
+    });
+    if (error) throw error;
+
+    showToast("Đã tạo folder con", `"${displayName}" đã sẵn sàng để upload.`);
+    document.getElementById("newSubfolderName").value = "";
+    document.getElementById("addSubfolderForm").hidden = true;
+    await loadFolders();
+    renderSubfolderGrid(currentFolderId);
+  } catch (error) {
+    showToast("Không tạo được folder con", error.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Tạo folder con";
+  }
+}
 
 async function loadFilesInFolder(folderId) {
   const { data, error } = await supabaseClient
@@ -254,6 +339,7 @@ function renderFileRow(file) {
           ${isOwner
       ? `<button class="action-btn" data-toggle-status="${file.status}" title="${file.status ? "Ẩn file" : "Hiện lại file"}">${file.status ? "🚫" : "↺"}</button>`
       : ""}
+          ${isOwner ? `<button class="action-btn delete" data-delete-file title="Xóa vĩnh viễn">⌫</button>` : ""}
         </div>
       </td>
     </tr>`;
@@ -275,6 +361,7 @@ function attachFileRowEvents(container) {
     });
     row.querySelector("[data-rename-file]")?.addEventListener("click", () => renameFile(fileId, row));
     row.querySelector("[data-move-file]")?.addEventListener("click", () => openMoveFolderModal(fileId));
+    row.querySelector("[data-delete-file]")?.addEventListener("click", () => deleteFileForever(fileId, storagePath));
 
     const toggleBtn = row.querySelector("[data-toggle-status]");
     if (toggleBtn) {
@@ -282,6 +369,32 @@ function attachFileRowEvents(container) {
       toggleBtn.addEventListener("click", () => toggleFileStatus(fileId, currentStatus));
     }
   });
+}
+
+// Xóa VĨNH VIỄN file của chính mình (khác với Ẩn/Hiện - đây không khôi phục được)
+async function deleteFileForever(fileId, storagePath) {
+  if (!confirm("XÓA VĨNH VIỄN file này? Không thể hoàn tác, kể cả lịch sử liên quan cũng sẽ mất.")) return;
+
+  try {
+    // 1) Xóa lịch sử liên quan trước (tránh lỗi khóa ngoại)
+    const { error: historyError } = await supabaseClient.from("history_file").delete().eq("id_file", fileId);
+    if (historyError) throw historyError;
+
+    // 2) Xóa file vật lý khỏi Storage
+    const bucketName = storagePath.split("/")[0];
+    const pathInsideBucket = storagePath.split("/").slice(1).join("/");
+    await supabaseClient.storage.from(bucketName).remove([pathInsideBucket]);
+
+    // 3) Xóa dòng dữ liệu file
+    const { error } = await supabaseClient.from("file").delete().eq("id", fileId);
+    if (error) throw error;
+
+    showToast("Đã xóa vĩnh viễn", "File đã bị xóa hoàn toàn khỏi hệ thống.");
+    if (currentFolderId) await loadFilesInFolder(currentFolderId);
+    if (searchDataLoaded) await loadSearchData();
+  } catch (error) {
+    showToast("Không xóa được", error.message);
+  }
 }
 
 async function openFileUrl(storagePath, isDownload, targetWindow) {
@@ -342,7 +455,7 @@ let movingFileId = null;
 function openMoveFolderModal(fileId) {
   movingFileId = fileId;
   const select = document.getElementById("moveFolderSelect");
-  select.innerHTML = folderList.map((f) => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join("");
+  select.innerHTML = buildFolderOptionsHTML();
   document.getElementById("moveFolderModal").classList.add("open");
 }
 
@@ -470,10 +583,23 @@ const originalLoadFolders = loadFolders;
 loadFolders = async function () {
   await originalLoadFolders();
   const select = document.getElementById("uploadFolder");
-  select.innerHTML =
-    `<option value="">-- Chọn folder --</option>` +
-    folderList.map((f) => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join("");
+  select.innerHTML = `<option value="">-- Chọn folder --</option>` + buildFolderOptionsHTML();
 };
+
+// Xây danh sách option cho dropdown, folder con thụt vào để phân biệt với folder cha
+function buildFolderOptionsHTML() {
+  const roots = folderList.filter((f) => !f.parent_id);
+  let html = "";
+  roots.forEach((root) => {
+    html += `<option value="${root.id}">${escapeHTML(root.display_name)}</option>`;
+    folderList
+      .filter((f) => f.parent_id === root.id)
+      .forEach((sub) => {
+        html += `<option value="${sub.id}">— ${escapeHTML(sub.display_name)}</option>`;
+      });
+  });
+  return html;
+}
 
 async function handleUpload(event) {
   event.preventDefault();
@@ -608,6 +734,7 @@ function renderSearchResults() {
             ${isOwner
           ? `<button class="action-btn" data-toggle-status="${file.status}" title="${file.status ? "Ẩn file" : "Hiện lại file"}">${file.status ? "🚫" : "↺"}</button>`
           : ""}
+            ${isOwner ? `<button class="action-btn delete" data-delete-file title="Xóa vĩnh viễn">⌫</button>` : ""}
           </div>
         </td>
       </tr>`;
