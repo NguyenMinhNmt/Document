@@ -715,7 +715,9 @@ document.getElementById("searchInput").addEventListener("input", renderSearchRes
 async function loadSearchData() {
   const { data, error } = await supabaseClient
     .from("file")
-    .select("id, file_name, storage_path, id_user, status, user:id_user(user_name), folder:id_folder(display_name)")
+    .select(
+      "id, file_name, storage_path, id_user, status, user:id_user(user_name), folder:id_folder(display_name, parent:parent_id(display_name))"
+    )
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -729,13 +731,35 @@ async function loadSearchData() {
   renderSearchResults();
 }
 
-function renderSearchResults() {
-  const keyword = document.getElementById("searchInput").value.trim().toLowerCase();
+// Hiện đường dẫn folder dạng "Cha / Con" nếu là folder con, chỉ tên nếu là folder gốc
+function formatFolderPath(file) {
+  const subName = file.folder?.display_name || "-";
+  const parentName = file.folder?.parent?.display_name;
+  return parentName ? `${parentName} / ${subName}` : subName;
+}
 
-  const results = allSearchableFiles.filter((file) => {
-    const haystack = `${file.id} ${file.file_name} ${file.user?.user_name || ""}`.toLowerCase();
-    return haystack.includes(keyword);
-  });
+function renderSearchResults() {
+  const rawKeyword = document.getElementById("searchInput").value.trim().toLowerCase();
+  let results;
+
+  if (rawKeyword.includes("/")) {
+    // Cú pháp đặc biệt "Tên folder cha/Tên folder con" -> tìm chính xác đúng cặp cha-con
+    const [parentPart, subPart] = rawKeyword.split("/").map((s) => s.trim());
+    results = allSearchableFiles.filter((file) => {
+      const parentName = (file.folder?.parent?.display_name || "").toLowerCase();
+      const subName = (file.folder?.display_name || "").toLowerCase();
+      return parentName.includes(parentPart) && subName.includes(subPart || "");
+    });
+  } else {
+    // Tìm thường: theo tên file, tên người upload, HOẶC tên folder (cả folder gốc lẫn folder con,
+    // gõ tên folder cha sẽ ra luôn file nằm trong các folder con của nó)
+    results = allSearchableFiles.filter((file) => {
+      const subName = file.folder?.display_name || "";
+      const parentName = file.folder?.parent?.display_name || "";
+      const haystack = `${file.id} ${file.file_name} ${file.user?.user_name || ""} ${subName} ${parentName}`.toLowerCase();
+      return haystack.includes(rawKeyword);
+    });
+  }
 
   document.getElementById("searchResultCount").textContent = results.length;
   document.getElementById("searchEmptyState").hidden = results.length > 0;
@@ -751,7 +775,7 @@ function renderSearchResults() {
       return /* html */ `
       <tr data-file-id="${file.id}" data-storage-path="${escapeAttr(file.storage_path)}">
         <td>${escapeHTML(file.file_name)}</td>
-        <td>${escapeHTML(file.folder?.display_name || "-")}</td>
+        <td>${escapeHTML(formatFolderPath(file))}</td>
         <td>${escapeHTML(file.user?.user_name || "-")}</td>
         <td>${statusBadge}</td>
         <td>

@@ -123,7 +123,9 @@ document.getElementById("fileSearchInput").addEventListener("input", renderFileT
 async function loadFiles() {
   const { data, error } = await supabaseClient
     .from("file")
-    .select("id, file_name, storage_path, status, created_at, id_folder, id_user, folder:id_folder(display_name), user:id_user(user_name)")
+    .select(
+      "id, file_name, storage_path, status, created_at, id_folder, id_user, folder:id_folder(display_name, parent:parent_id(display_name)), user:id_user(user_name)"
+    )
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -135,12 +137,33 @@ async function loadFiles() {
   renderFileTable();
 }
 
+// Hiện đường dẫn folder dạng "Cha / Con" nếu là folder con, chỉ tên nếu là folder gốc
+function formatFolderPath(file) {
+  const subName = file.folder?.display_name || "-";
+  const parentName = file.folder?.parent?.display_name;
+  return parentName ? `${parentName} / ${subName}` : subName;
+}
+
 function renderFileTable() {
-  const keyword = document.getElementById("fileSearchInput").value.trim().toLowerCase();
-  const list = allFiles.filter((file) => {
-    const haystack = `${file.id} ${file.file_name} ${file.user?.user_name || ""} ${file.folder?.display_name || ""}`.toLowerCase();
-    return haystack.includes(keyword);
-  });
+  const rawKeyword = document.getElementById("fileSearchInput").value.trim().toLowerCase();
+  let list;
+
+  if (rawKeyword.includes("/")) {
+    // Cú pháp đặc biệt "Tên folder cha/Tên folder con" -> tìm chính xác đúng cặp cha-con
+    const [parentPart, subPart] = rawKeyword.split("/").map((s) => s.trim());
+    list = allFiles.filter((file) => {
+      const parentName = (file.folder?.parent?.display_name || "").toLowerCase();
+      const subName = (file.folder?.display_name || "").toLowerCase();
+      return parentName.includes(parentPart) && subName.includes(subPart || "");
+    });
+  } else {
+    list = allFiles.filter((file) => {
+      const subName = file.folder?.display_name || "";
+      const parentName = file.folder?.parent?.display_name || "";
+      const haystack = `${file.id} ${file.file_name} ${file.user?.user_name || ""} ${subName} ${parentName}`.toLowerCase();
+      return haystack.includes(rawKeyword);
+    });
+  }
 
   document.getElementById("fileResultCount").textContent = list.length;
   document.getElementById("fileEmptyState").hidden = list.length > 0;
@@ -160,7 +183,7 @@ function renderFileRow(file) {
     <tr data-file-id="${file.id}" data-storage-path="${escapeAttr(file.storage_path)}" data-status="${file.status}">
       <td>#${file.id}</td>
       <td>${escapeHTML(file.file_name)}</td>
-      <td>${escapeHTML(file.folder?.display_name || "-")}</td>
+      <td>${escapeHTML(formatFolderPath(file))}</td>
       <td>${escapeHTML(file.user?.user_name || "-")}</td>
       <td>${statusHtml}</td>
       <td>${formatDate(file.created_at)}</td>
