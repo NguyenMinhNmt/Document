@@ -367,7 +367,23 @@ async function loadUsers() {
   if (error) return showToast("Không tải được user", error.message);
 
   allUsers = data || [];
+  await loadUserFileCounts();
   renderUserTable();
+}
+
+// Đếm tổng số file (kể cả đang ẩn) mỗi user đã từng upload, hiện trong bảng Quản lý user
+async function loadUserFileCounts() {
+  const results = await Promise.all(
+    allUsers.map(async (u) => {
+      const { count } = await supabaseClient
+        .from("file")
+        .select("id", { count: "exact", head: true })
+        .eq("id_user", u.id);
+      return { id: u.id, count: count || 0 };
+    })
+  );
+  const countMap = Object.fromEntries(results.map((r) => [r.id, r.count]));
+  allUsers = allUsers.map((u) => ({ ...u, fileCount: countMap[u.id] || 0 }));
 }
 
 function renderUserTable() {
@@ -405,6 +421,7 @@ function renderUserRow(user) {
       <td>${user.gender === true ? "Nam" : user.gender === false ? "Nữ" : "-"}</td>
       <td>${statusHtml}</td>
       <td>${roleHtml}</td>
+      <td>${user.fileCount ?? 0}</td>
       <td>${user.last_sign_in_at ? formatDate(user.last_sign_in_at) : "-"}</td>
       <td>
         <div class="actions">

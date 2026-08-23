@@ -51,8 +51,19 @@ async function bootstrapUserPage() {
   elUserAvatar.textContent = currentUser.name.slice(0, 2).toUpperCase();
 
   await loadFolders();
+  await loadMyFileCount();
   await CommentModule.init("commentRoot", { userId: currentUser.id, isAdmin: false });
   restorePageFromHash();
+}
+
+// Tổng số file (kể cả đang ẩn) mà chính user này đã từng upload, hiện ở khung hồ sơ sidebar
+async function loadMyFileCount() {
+  const { count } = await supabaseClient
+    .from("file")
+    .select("id", { count: "exact", head: true })
+    .eq("id_user", currentUser.id);
+
+  document.getElementById("userFileCountLabel").textContent = `${count || 0} file đã upload`;
 }
 
 // ---------- 4. ĐIỀU HƯỚNG GIỮA CÁC TAB ----------
@@ -392,6 +403,7 @@ async function deleteFileForever(fileId, storagePath) {
     showToast("Đã xóa vĩnh viễn", "File đã bị xóa hoàn toàn khỏi hệ thống.");
     if (currentFolderId) await loadFilesInFolder(currentFolderId);
     if (searchDataLoaded) await loadSearchData();
+    await loadMyFileCount();
   } catch (error) {
     showToast("Không xóa được", error.message);
   }
@@ -677,6 +689,7 @@ async function handleUpload(event) {
     document.getElementById("uploadForm").reset();
     document.getElementById("uploadSubfolderWrap").hidden = true;
     searchDataLoaded = false; // để lần sau vào tab Tìm kiếm sẽ tải lại danh sách mới
+    await loadMyFileCount();
   } catch (error) {
     showToast("Tải lên thất bại", error.message || "Vui lòng thử lại.");
   } finally {
