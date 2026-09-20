@@ -138,7 +138,7 @@ async function handleLogin(event) {
       .eq("id", authData.user.id);
 
     showMessage("Đăng nhập thành công, đang chuyển hướng...", "success");
-    window.location.href = profile.is_admin ? "/html/admin.html" : "/html/user.html";
+    window.location.href = profile.is_admin ? "./html/admin.html" : "./html/user.html";
   } catch (error) {
     showMessage(translateAuthError(error), "error");
   } finally {
@@ -294,3 +294,30 @@ function translateAuthError(error) {
 
   return msg || "Có lỗi xảy ra, vui lòng thử lại.";
 }
+
+// ---------- 9. TỰ ĐỘNG GẮN NÚT "HIỆN/ẨN MẬT KHẨU" VÀO MỌI Ô PASSWORD TRÊN TRANG ----------
+function enablePasswordToggles() {
+  document.querySelectorAll('input[type="password"]').forEach((input) => {
+    if (input.dataset.toggleAttached) return;
+    input.dataset.toggleAttached = "true";
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "password-field-wrap";
+    input.parentNode.insertBefore(wrapper, input);
+    wrapper.appendChild(input);
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.className = "password-toggle-btn";
+    toggleBtn.textContent = "👁";
+    toggleBtn.setAttribute("aria-label", "Hiện/ẩn mật khẩu");
+    wrapper.appendChild(toggleBtn);
+
+    toggleBtn.addEventListener("click", () => {
+      const showing = input.type === "text";
+      input.type = showing ? "password" : "text";
+      toggleBtn.textContent = showing ? "👁" : "🙈";
+    });
+  });
+}
+enablePasswordToggles();

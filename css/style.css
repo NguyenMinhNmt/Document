@@ -802,6 +802,34 @@ textarea.form-control {
   min-height: 80px;
 }
 
+/* ---------- 9b. NÚT HIỆN/ẨN MẬT KHẨU (tự động thêm vào mọi ô password bằng JS) ---------- */
+.password-field-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-field-wrap input {
+  width: 100%;
+  padding-right: 2.6rem;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 0.6rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-faint);
+  font-size: 1rem;
+  padding: 0.2rem;
+  line-height: 1;
+}
+
+.password-toggle-btn:hover {
+  color: var(--accent-2);
+}
+
 /* ---------- 10. MODAL ---------- */
 .modal {
   position: fixed;
