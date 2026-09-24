@@ -7,7 +7,8 @@
   <title>Tài liệu của tôi - Web Tài Liệu</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
+  <link
+    href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Literata:opsz,wght@6..72,500;6..72,600;6..72,700&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -55,7 +56,6 @@
         <section class="page active" id="documentsPage">
           <div class="page-heading">
             <div>
-              <p class="eyebrow">TÀI LIỆU</p>
               <h1 id="documentsTitle">Tất cả folder</h1>
               <p id="documentsDesc">Chọn 1 folder để xem file bên trong</p>
             </div>
@@ -136,7 +136,6 @@
         <section class="page" id="uploadPage">
           <div class="page-heading">
             <div>
-              <p class="eyebrow">UPLOAD</p>
               <h1>Tải file lên hệ thống</h1>
               <p>File sẽ được lưu vào folder bạn chọn bên dưới</p>
             </div>
@@ -146,7 +145,8 @@
             <form id="uploadForm" class="form-grid single" style="padding:1.5rem;">
               <div class="form-field">
                 <label for="uploadName">Tên file hiển thị (để trống sẽ giữ nguyên tên file gốc)</label>
-                <input class="form-control" type="text" id="uploadName" name="file_name" placeholder="VD: Báo cáo tháng 8">
+                <input class="form-control" type="text" id="uploadName" name="file_name"
+                  placeholder="VD: Báo cáo tháng 8">
               </div>
               <div class="form-field">
                 <label for="uploadFolder">Chọn folder</label>
@@ -167,7 +167,8 @@
               </div>
               <div class="form-field">
                 <label for="uploadBio">Mô tả file</label>
-                <textarea class="form-control" id="uploadBio" name="bio" placeholder="Mô tả ngắn gọn nội dung file..."></textarea>
+                <textarea class="form-control" id="uploadBio" name="bio"
+                  placeholder="Mô tả ngắn gọn nội dung file..."></textarea>
               </div>
               <button type="submit" class="button button-primary" id="uploadSubmitBtn" style="justify-content:center;">
                 ⬆ Tải lên
@@ -180,7 +181,6 @@
         <section class="page" id="searchPage">
           <div class="page-heading">
             <div>
-              <p class="eyebrow">TÌM KIẾM</p>
               <h1>Tìm tài liệu</h1>
               <p>Tìm theo ID, tên file, hoặc tên người upload</p>
             </div>
@@ -219,7 +219,6 @@
         <section class="page" id="discussionPage">
           <div class="page-heading">
             <div>
-              <p class="eyebrow">THẢO LUẬN</p>
               <h1>Bảng tin chung</h1>
               <p>Trao đổi chung cho mọi thành viên</p>
             </div>
@@ -233,7 +232,6 @@
         <section class="page" id="accountPage">
           <div class="page-heading">
             <div>
-              <p class="eyebrow">TÀI KHOẢN</p>
               <h1>Cập nhật tài khoản</h1>
               <p>Đổi tên hiển thị hoặc mật khẩu — cần nhập đúng mật khẩu hiện tại</p>
             </div>
@@ -251,11 +249,13 @@
               </div>
               <div class="form-field">
                 <label for="accountConfirmPassword">Nhập lại mật khẩu mới</label>
-                <input class="form-control" type="password" id="accountConfirmPassword" placeholder="Nhập lại mật khẩu mới">
+                <input class="form-control" type="password" id="accountConfirmPassword"
+                  placeholder="Nhập lại mật khẩu mới">
               </div>
               <div class="form-field">
                 <label for="accountCurrentPassword">Mật khẩu HIỆN TẠI (bắt buộc để xác thực)</label>
-                <input class="form-control" type="password" id="accountCurrentPassword" placeholder="Nhập mật khẩu đang dùng" required>
+                <input class="form-control" type="password" id="accountCurrentPassword"
+                  placeholder="Nhập mật khẩu đang dùng" required>
               </div>
               <div class="form-field">
                 <button type="submit" class="button button-primary" id="accountSubmitBtn">✓ Cập nhật</button>
@@ -274,7 +274,6 @@
     <section class="modal-dialog" role="dialog" aria-modal="true">
       <div class="modal-header">
         <div>
-          <p class="eyebrow">CHUYỂN FOLDER</p>
           <h2>Chọn folder mới cho file này</h2>
         </div>
         <button class="close-button" data-close-move-modal aria-label="Đóng">×</button>

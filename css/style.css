@@ -3,48 +3,66 @@
    Cấu trúc: Biến màu -> Reset -> Layout khung -> Component -> Trang riêng
    ========================================================================== */
 
-/* ---------- 1. BIẾN MÀU & FONT DÙNG CHUNG ---------- */
+/* ---------- 1. BIẾN MÀU & FONT DÙNG CHUNG ----------
+   Bảng màu "giấy + mực" - gắn với bối cảnh thật: kho tài liệu học tập
+   (Toán, Văn, đề thi...), không phải dashboard SaaS chung chung. */
 :root {
-  /* Nền */
-  --bg-main: #0a0f1e;
-  /* nền tối nhất, ngoài cùng */
-  --bg-panel: #0f1729;
-  /* nền sidebar / card */
-  --bg-panel-2: #141d33;
-  /* nền card lồng trong card, input */
-  --bg-hover: #1b2540;
+  /* Nền - giấy, không phải nền tối */
+  --bg-main: #f6f4ee;
+  /* nền giấy chính */
+  --bg-panel: #fdfcf8;
+  /* nền sidebar / card - giấy sáng hơn 1 chút */
+  --bg-panel-2: #eeebe0;
+  /* nền input, khối lồng bên trong */
+  --bg-hover: #e7e2d2;
   /* nền khi hover */
 
-  /* Viền */
-  --border-color: #22304d;
+  /* Viền - như đường kẻ trên giấy */
+  --border-color: #dad5c4;
 
-  /* Chữ */
-  --text-main: #f1f5fb;
-  /* tiêu đề, chữ chính */
-  --text-sub: #93a2c2;
-  /* mô tả, chữ phụ */
-  --text-faint: #5c6c8f;
+  /* Chữ - mực đen-navy, không phải trắng trên nền tối */
+  --text-main: #21283a;
+  /* mực đậm - tiêu đề, chữ chính */
+  --text-sub: #5c6478;
+  /* mực nhạt hơn - mô tả, chữ phụ */
+  --text-faint: #8b8b7a;
   /* chữ mờ nhất, placeholder */
 
-  /* Màu nhấn - gradient xanh dương giống portfolio */
-  --accent-1: #3b82f6;
-  --accent-2: #60a5fa;
-  --accent-gradient: linear-gradient(135deg, var(--accent-1), var(--accent-2));
-  --accent-soft-bg: #17223f;
+  /* Màu nhấn - mực bút bi xanh (không phải gradient) */
+  --accent-1: #2f4c8c;
+  --accent-2: #3a5da3;
+  --accent-gradient: var(--accent-1);
+  /* giữ tên biến cũ cho tương thích, nhưng KHÔNG dùng gradient nữa */
+  --accent-soft-bg: #e4e9f4;
   /* nền dạng badge nhạt */
 
-  /* Trạng thái */
-  --color-success: #34d399;
-  --color-danger: #f87171;
-  --color-warning: #fbbf24;
+  /* Mực đỏ - cảnh báo/xóa, và màu tab hồ sơ (folder) */
+  --pen-red: #a63b2e;
+  --tab-gold: #b4841f;
 
-  /* Bo góc & khoảng cách */
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
+  /* Trạng thái */
+  --color-success: #3f7d4f;
+  --color-danger: #a63b2e;
+  --color-warning: #b4841f;
+
+  /* Bo góc - nhỏ lại, giống thẻ hồ sơ/index card, không bo tròn hết cỡ */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
   --radius-pill: 999px;
 
-  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-card: 0 1px 0 var(--border-color);
+}
+
+/* Font: Literata (serif) cho tiêu đề - cảm giác sách vở/học thuật.
+   Be Vietnam Pro (sans) cho phần UI/chữ nhỏ - đã hỗ trợ tốt tiếng Việt. */
+h1,
+h2,
+.brand strong,
+.modal-header h2 {
+  font-family: "Literata", Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 /* ---------- 1.5. ĐẢM BẢO hidden LUÔN HOẠT ĐỘNG ĐÚNG ---------- */
@@ -141,25 +159,26 @@ ul {
 .brand-mark {
   width: 40px;
   height: 40px;
-  border-radius: var(--radius-md);
-  background: var(--accent-gradient);
+  border-radius: var(--radius-sm);
+  background: var(--text-main);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  color: #fff;
+  font-family: "Literata", serif;
+  color: var(--bg-panel);
   flex-shrink: 0;
 }
 
 .brand strong {
   display: block;
-  font-size: 0.95rem;
+  font-size: 1rem;
 }
 
 .brand small {
   color: var(--text-sub);
   font-size: 0.7rem;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.03em;
 }
 
 .admin-card {
@@ -168,7 +187,7 @@ ul {
   gap: 0.75rem;
   background: var(--bg-panel-2);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   padding: 0.75rem;
 }
 
@@ -177,13 +196,13 @@ ul {
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: var(--accent-gradient);
+  background: var(--text-main);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
   font-size: 0.85rem;
-  color: #fff;
+  color: var(--bg-panel);
   flex-shrink: 0;
 }
 
@@ -209,8 +228,7 @@ ul {
 }
 
 .nav-label {
-  font-size: 0.7rem;
-  letter-spacing: 0.08em;
+  font-size: 0.72rem;
   color: var(--text-faint);
   padding: 0.75rem 0.6rem 0.4rem;
 }
@@ -220,12 +238,12 @@ ul {
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  padding: 0.65rem 0.75rem;
-  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid transparent;
   color: var(--text-sub);
   font-size: 0.88rem;
   text-align: left;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
 .nav-item:hover {
@@ -234,8 +252,9 @@ ul {
 }
 
 .nav-item.active {
-  background: var(--accent-soft-bg);
-  color: var(--accent-2);
+  background: var(--bg-hover);
+  border-left-color: var(--tab-gold);
+  color: var(--text-main);
   font-weight: 600;
 }
 
@@ -249,7 +268,7 @@ ul {
   margin-top: auto;
   background: var(--bg-panel-2);
   border: 1px dashed var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   padding: 0.85rem;
   font-size: 0.78rem;
   color: var(--text-sub);
@@ -387,17 +406,17 @@ ul {
 .button {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.65rem 1.1rem;
-  border-radius: var(--radius-pill);
+  gap: 0.45rem;
+  padding: 0.6rem 1.05rem;
+  border-radius: var(--radius-sm);
   font-size: 0.85rem;
   font-weight: 600;
-  transition: opacity 0.15s, transform 0.1s;
+  transition: background-color 0.15s, border-color 0.15s, transform 0.1s;
   white-space: nowrap;
 }
 
 .button:hover {
-  opacity: 0.9;
+  opacity: 1;
 }
 
 .button:active {
@@ -405,19 +424,35 @@ ul {
 }
 
 .button-primary {
-  background: var(--accent-gradient);
-  color: #fff;
+  background: var(--accent-1);
+  color: #fdfcf8;
+  border: 1px solid var(--accent-1);
+}
+
+.button-primary:hover {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
 }
 
 .button-secondary {
-  background: var(--bg-panel-2);
+  background: transparent;
   border: 1px solid var(--border-color);
   color: var(--text-main);
 }
 
+.button-secondary:hover {
+  background: var(--bg-hover);
+}
+
 .button-danger {
-  background: var(--color-danger);
-  color: #fff;
+  background: transparent;
+  border: 1px solid var(--pen-red);
+  color: var(--pen-red);
+}
+
+.button-danger:hover {
+  background: var(--pen-red);
+  color: #fdfcf8;
 }
 
 .button:disabled {
@@ -429,8 +464,9 @@ ul {
 .card {
   background: var(--bg-panel);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
+  border-top: 3px solid var(--accent-1);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
 }
 
 .card-header {
@@ -468,28 +504,28 @@ ul {
   gap: 0.9rem;
   background: var(--bg-panel);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  border-left: 4px solid var(--tab-gold);
+  border-radius: var(--radius-sm);
   padding: 1.1rem;
   text-align: left;
-  transition: border-color 0.15s, transform 0.15s;
+  transition: background-color 0.15s;
   cursor: pointer;
 }
 
 .stat-card:hover {
-  border-color: var(--accent-1);
-  transform: translateY(-2px);
+  background: var(--bg-hover);
 }
 
 .stat-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-md);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.1rem;
   background: var(--accent-soft-bg);
-  color: var(--accent-2);
+  color: var(--accent-1);
   flex-shrink: 0;
 }
 
@@ -500,7 +536,9 @@ ul {
 }
 
 .stat-copy strong {
-  font-size: 1.35rem;
+  font-family: "Literata", Georgia, serif;
+  font-weight: 600;
+  font-size: 1.15rem;
 }
 
 .stat-card>b {
@@ -736,24 +774,25 @@ tbody tr:hover {
 }
 
 .status.active {
-  background: rgba(52, 211, 153, 0.12);
+  background: #e3ede4;
   color: var(--color-success);
 }
 
 .status.inactive {
-  background: rgba(248, 113, 113, 0.12);
+  background: #f3e2df;
   color: var(--color-danger);
 }
 
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 0.25rem 0.65rem;
-  border-radius: var(--radius-pill);
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-sm);
   font-size: 0.72rem;
   font-weight: 600;
   background: var(--accent-soft-bg);
-  color: var(--accent-2);
+  color: var(--accent-1);
+  border: 1px solid var(--border-color);
 }
 
 /* ---------- 9. FORM (dùng trong modal lẫn form độc lập) ---------- */
@@ -979,10 +1018,7 @@ textarea.form-control {
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  background:
-    radial-gradient(circle at 15% 15%, rgba(59, 130, 246, 0.12), transparent 40%),
-    radial-gradient(circle at 85% 85%, rgba(96, 165, 250, 0.1), transparent 40%),
-    var(--bg-main);
+  background: var(--bg-main);
 }
 
 .auth-card {
