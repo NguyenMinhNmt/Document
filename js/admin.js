@@ -88,6 +88,7 @@ const pageTitles = {
   users: "Quản lý user",
   upload: "Upload",
   history: "Lịch sử",
+  leaderboard: "Bảng xếp hạng",
   discussion: "Thảo luận",
   settings: "Cài đặt",
   account: "Tài khoản",
