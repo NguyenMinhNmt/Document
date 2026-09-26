@@ -17,7 +17,7 @@
       "destination": "/admin.html"
     },
     {
-      "source": "/admin.html",
+      "source": "./admin.html",
       "destination": "./html/admin.html"
     },
     {
@@ -25,7 +25,7 @@
       "destination": "/user.html"
     },
     {
-      "source": "/user.html",
+      "source": "./user.html",
       "destination": "./html/user.html"
     }
   ]
