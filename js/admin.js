@@ -1,6 +1,20 @@
 /* ==========================================================================
-   ADMIN.JS - Tối ưu SWR (Lấy Cache hiển thị ngay + Revalidate ngầm theo Tab)
+   ADMIN.JS - Tối ưu SWR (Fixed ReferenceError pageTitles)
    ========================================================================== */
+
+// 1. Khai báo biến & Danh sách Tab lên đầu file
+const pageTitles = {
+  files: "Quản lý tài liệu",
+  folders: "Quản lý Folder",
+  hashtags: "Quản lý Hashtag",
+  users: "Quản lý user",
+  leaderboard: "Bảng xếp hạng",
+  upload: "Upload",
+  history: "Lịch sử",
+  discussion: "Thảo luận",
+  settings: "Cài đặt",
+  account: "Tài khoản"
+};
 
 let currentUser = null;
 let allFilesData = JSON.parse(localStorage.getItem("cache_admin_files") || "[]");
@@ -18,11 +32,11 @@ const elUserAvatar = document.getElementById("userAvatar");
 bootstrapAdminPage();
 
 async function bootstrapAdminPage() {
-  // 1. MỞ NGAY TAB VÀ RENDER TỪ CACHE (0.001s)
+  // Mở ngay Tab và render dữ liệu cũ từ Cache (0.001s)
   restorePageFromHash();
   renderFromCache();
 
-  // 2. Kiểm tra phiên đăng nhập
+  // Kiểm tra phiên đăng nhập
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (!session) { window.location.href = "login.html"; return; }
 
@@ -52,7 +66,7 @@ async function bootstrapAdminPage() {
   initThemeToggle(profile.color);
   await CommentModule.init("commentRoot", { userId: currentUser.id, isAdmin: true });
 
-  // 3. REVALIDATE DỮ LIỆU CỦA ĐÚNG TAB ĐANG MỞ KHI F5
+  // Tải ngầm dữ liệu mới của đúng tab đang mở khi F5
   const currentTab = window.location.hash.replace("#", "") || "files";
   revalidateTabData(currentTab);
 }
@@ -742,8 +756,6 @@ document.getElementById("logoutBtn")?.addEventListener("click", async () => {
   await supabaseClient.auth.signOut();
   window.location.href = "login.html";
 });
-
-const pageTitles = { files: "Quản lý tài liệu", folders: "Quản lý Folder", hashtags: "Quản lý Hashtag", users: "Quản lý user", leaderboard: "Bảng xếp hạng", upload: "Upload", history: "Lịch sử", discussion: "Thảo luận", settings: "Cài đặt", account: "Tài khoản" };
 
 function switchPage(p) {
   const targetPage = pageTitles[p] ? p : "files";

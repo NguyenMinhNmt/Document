@@ -1,6 +1,15 @@
 /* ==========================================================================
-   USER.JS - Tối ưu SWR (Lấy Cache hiển thị ngay + Revalidate ngầm theo Tab)
+   USER.JS - Tối ưu SWR (Fixed ReferenceError pageTitles)
    ========================================================================== */
+
+// 1. Khai báo biến & Danh sách Tab lên đầu file
+const pageTitles = {
+  documents: "Tài liệu",
+  leaderboard: "Bảng xếp hạng",
+  upload: "Upload",
+  discussion: "Thảo luận",
+  account: "Tài khoản"
+};
 
 let currentUser = null;
 let allFilesData = JSON.parse(localStorage.getItem("cache_files") || "[]");
@@ -18,11 +27,11 @@ const elUserAvatar = document.getElementById("userAvatar");
 bootstrapUserPage();
 
 async function bootstrapUserPage() {
-  // 1. MỞ NGAY TAB VÀ HÀM RENDER TỪ CACHE (0.001s)
+  // Mở ngay Tab và render dữ liệu cũ từ Cache (0.001s)
   restorePageFromHash();
   renderFromCache();
 
-  // 2. Kiểm tra phiên đăng nhập
+  // Kiểm tra phiên đăng nhập
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (!session) { window.location.href = "login.html"; return; }
 
@@ -46,7 +55,7 @@ async function bootstrapUserPage() {
   initThemeToggle(profile.color);
   await CommentModule.init("commentRoot", { userId: currentUser.id, isAdmin: false });
 
-  // 3. REVALIDATE DỮ LIỆU CỦA ĐÚNG TAB ĐANG MỞ KHI F5
+  // Tải ngầm dữ liệu mới của tab hiện tại
   const currentTab = window.location.hash.replace("#", "") || "documents";
   revalidateTabData(currentTab);
 }
@@ -57,13 +66,11 @@ window.addEventListener("hashchange", () => {
   revalidateTabData(currentTab);
 });
 
-// Render nhanh dữ liệu từ RAM/Cache
 function renderFromCache() {
   populateFilterDropdowns();
   renderDocTable();
 }
 
-// BỘ LỌC CHỈ TẢI ĐÚNG DỮ LIỆU CẦN THIẾT CỦA TAB ĐANG DÙNG
 async function revalidateTabData(tab) {
   if (tab === "documents") {
     await Promise.all([loadFolders(), loadUsersList(), loadHashtagsList(), loadAllFiles()]);
@@ -430,8 +437,6 @@ document.getElementById("logoutBtn")?.addEventListener("click", async () => {
   await supabaseClient.auth.signOut();
   window.location.href = "login.html";
 });
-
-const pageTitles = { documents: "Tài liệu", leaderboard: "Bảng xếp hạng", upload: "Upload", discussion: "Thảo luận", account: "Tài khoản" };
 
 function switchPage(p) {
   const targetPage = pageTitles[p] ? p : "documents";
