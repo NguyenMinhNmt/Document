@@ -1,12 +1,12 @@
 /* ==========================================================================
-   ADMIN.JS - Xử lý toàn bộ logic trang Admin (Tối ưu tốc độ + Hash Routing)
+   ADMIN.JS - Tối ưu SWR (Lấy Cache hiển thị ngay + Revalidate ngầm theo Tab)
    ========================================================================== */
 
 let currentUser = null;
-let allFilesData = [];
-let allFoldersData = [];
-let allUsersData = [];
-let allHashtagsData = [];
+let allFilesData = JSON.parse(localStorage.getItem("cache_admin_files") || "[]");
+let allFoldersData = JSON.parse(localStorage.getItem("cache_folders") || "[]");
+let allUsersData = JSON.parse(localStorage.getItem("cache_admin_users") || "[]");
+let allHashtagsData = JSON.parse(localStorage.getItem("cache_hashtags") || "[]");
 let selectedTagsList = [];
 let toastTimer;
 
@@ -18,6 +18,11 @@ const elUserAvatar = document.getElementById("userAvatar");
 bootstrapAdminPage();
 
 async function bootstrapAdminPage() {
+  // 1. MỞ NGAY TAB VÀ RENDER TỪ CACHE (0.001s)
+  restorePageFromHash();
+  renderFromCache();
+
+  // 2. Kiểm tra phiên đăng nhập
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (!session) { window.location.href = "login.html"; return; }
 
@@ -41,58 +46,82 @@ async function bootstrapAdminPage() {
     isSuperAdmin: !!profile.is_super_admin
   };
 
-  elUserNameLabel.textContent = currentUser.name + (currentUser.isSuperAdmin ? " (Super Admin)" : "");
-  elUserAvatar.textContent = currentUser.name.slice(0, 2).toUpperCase();
+  if (elUserNameLabel) elUserNameLabel.textContent = currentUser.name + (currentUser.isSuperAdmin ? " (Super Admin)" : "");
+  if (elUserAvatar) elUserAvatar.textContent = currentUser.name.slice(0, 2).toUpperCase();
 
   initThemeToggle(profile.color);
-
-  // Tải dữ liệu ban đầu
-  await loadInitData();
-  await loadHistory();
-  await loadSettings();
   await CommentModule.init("commentRoot", { userId: currentUser.id, isAdmin: true });
 
-  // Giữ nguyên Tab khi F5
-  restorePageFromHash();
+  // 3. REVALIDATE DỮ LIỆU CỦA ĐÚNG TAB ĐANG MỞ KHI F5
+  const currentTab = window.location.hash.replace("#", "") || "files";
+  revalidateTabData(currentTab);
 }
 
-// Bắt sự kiện khi chuyển URL Hash hoặc bấm Back/Forward
-window.addEventListener("hashchange", restorePageFromHash);
+window.addEventListener("hashchange", () => {
+  restorePageFromHash();
+  const currentTab = window.location.hash.replace("#", "") || "files";
+  revalidateTabData(currentTab);
+});
 
-async function loadInitData() {
-  await Promise.all([
-    loadFolders(),
-    loadUsersList(),
-    loadHashtagsList(),
-    loadAllFiles(),
-    loadLeaderboard()
-  ]);
+function renderFromCache() {
   populateFilterDropdowns();
   renderFileTable();
   renderFolderManageList();
   renderHashtagManageList();
+  renderUserTable();
+}
+
+async function revalidateTabData(tab) {
+  if (tab === "files") {
+    await Promise.all([loadFolders(), loadUsersList(), loadHashtagsList(), loadAllFiles()]);
+    populateFilterDropdowns();
+    renderFileTable();
+  } else if (tab === "folders") {
+    await loadFolders();
+    renderFolderManageList();
+  } else if (tab === "hashtags") {
+    await loadHashtagsList();
+    renderHashtagManageList();
+  } else if (tab === "users") {
+    await loadUsersList();
+  } else if (tab === "leaderboard") {
+    await loadLeaderboard();
+  } else if (tab === "history") {
+    await loadHistory();
+  } else if (tab === "settings") {
+    await loadSettings();
+  }
 }
 
 async function loadFolders() {
   const { data } = await supabaseClient.from("folder").select("id, display_name, bucket_name").order("display_name");
-  allFoldersData = data || [];
-  const select = document.getElementById("uploadFolderSelect");
-  if (select) {
-    select.innerHTML = '<option value="">-- Chọn Folder --</option>' +
-      allFoldersData.map(f => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join('');
+  if (data) {
+    allFoldersData = data;
+    localStorage.setItem("cache_folders", JSON.stringify(data));
+    const select = document.getElementById("uploadFolderSelect");
+    if (select) {
+      select.innerHTML = '<option value="">-- Chọn Folder --</option>' +
+        allFoldersData.map(f => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join('');
+    }
   }
 }
 
 async function loadUsersList() {
   const { data } = await supabaseClient.from("user").select("id, user_name, status, is_admin, is_super_admin, last_sign_in_at").order("user_name");
-  allUsersData = data || [];
-  renderUserTable();
+  if (data) {
+    allUsersData = data;
+    localStorage.setItem("cache_admin_users", JSON.stringify(data));
+    renderUserTable();
+  }
 }
 
 async function loadHashtagsList() {
   const { data } = await supabaseClient.from("hashtag").select("id, name, created_at").order("name");
-  allHashtagsData = data || [];
-  renderAvailableTagsSelect();
+  if (data) {
+    allHashtagsData = data;
+    localStorage.setItem("cache_hashtags", JSON.stringify(data));
+    renderAvailableTagsSelect();
+  }
 }
 
 async function loadAllFiles() {
@@ -101,7 +130,10 @@ async function loadAllFiles() {
     .select("id, file_name, storage_path, bio, created_at, id_user, id_folder, status, user:id_user(user_name), folder:id_folder(display_name, bucket_name), file_hashtag(hashtag:id_hashtag(id, name))")
     .order("created_at", { ascending: false });
 
-  allFilesData = data || [];
+  if (data) {
+    allFilesData = data;
+    localStorage.setItem("cache_admin_files", JSON.stringify(data));
+  }
 }
 
 function populateFilterDropdowns() {
@@ -114,6 +146,7 @@ function populateFilterDropdowns() {
   if (fTag) fTag.innerHTML = '<option value="">Tất cả Hashtag</option>' + allHashtagsData.map(t => `<option value="${t.id}">#${escapeHTML(t.name)}</option>`).join('');
 
   [document.getElementById("filterKeyword"), fFolder, fUploader, fTag].forEach(el => {
+    el?.removeEventListener("input", renderFileTable);
     el?.addEventListener("input", renderFileTable);
   });
 }
@@ -291,7 +324,6 @@ function renderFolderManageList() {
   body.querySelectorAll("[data-delete-folder]").forEach(b => b.addEventListener("click", () => deleteFolder(b.dataset.deleteFolder)));
 }
 
-// TỐI ƯU FORM TẠO FOLDER (Chống double click + Cập nhật siêu tốc)
 document.getElementById("folderForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const btn = document.getElementById("folderSubmitBtn");
@@ -313,11 +345,10 @@ document.getElementById("folderForm")?.addEventListener("submit", async (e) => {
 
     if (error) throw error;
 
-    // Lệnh tạo bucket chạy ngầm
     supabaseClient.functions.invoke("create-bucket", { body: { bucketName } });
 
-    // Cập nhật bộ nhớ RAM & Vẽ lại UI tức thì
     allFoldersData.push(newFolder);
+    localStorage.setItem("cache_folders", JSON.stringify(allFoldersData));
     renderFolderManageList();
     populateFilterDropdowns();
 
@@ -337,6 +368,7 @@ async function deleteFolder(id) {
   if (error) return showToast("Lỗi xóa", "Folder vẫn còn chứa file.");
 
   allFoldersData = allFoldersData.filter(f => f.id !== id);
+  localStorage.setItem("cache_folders", JSON.stringify(allFoldersData));
   renderFolderManageList();
   populateFilterDropdowns();
   showToast("Đã xóa Folder", "");
@@ -356,7 +388,6 @@ function renderHashtagManageList() {
   body.querySelectorAll("[data-delete-hashtag]").forEach(b => b.addEventListener("click", () => deleteHashtag(b.dataset.deleteHashtag)));
 }
 
-// TỐI ƯU FORM TẠO HASHTAG
 document.getElementById("hashtagForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const btn = document.getElementById("hashtagSubmitBtn");
@@ -377,6 +408,7 @@ document.getElementById("hashtagForm")?.addEventListener("submit", async (e) => 
     if (error) throw error;
 
     allHashtagsData.push(newTag);
+    localStorage.setItem("cache_hashtags", JSON.stringify(allHashtagsData));
     renderHashtagManageList();
     renderAvailableTagsSelect();
     populateFilterDropdowns();
@@ -395,6 +427,7 @@ async function deleteHashtag(id) {
   if (!confirm("Xóa Hashtag này?")) return;
   await supabaseClient.from("hashtag").delete().eq("id", id);
   allHashtagsData = allHashtagsData.filter(h => h.id !== id);
+  localStorage.setItem("cache_hashtags", JSON.stringify(allHashtagsData));
   renderHashtagManageList();
   renderAvailableTagsSelect();
   populateFilterDropdowns();
@@ -522,10 +555,10 @@ function renderUserTable() {
   if (!body) return;
 
   body.innerHTML = list.map(user => {
-    const isSelf = user.id === currentUser.id;
-    const canManageRole = currentUser.isSuperAdmin && !isSelf && !user.is_super_admin;
-    const canDelete = !isSelf && !user.is_super_admin && (currentUser.isSuperAdmin || !user.is_admin);
-    const canToggleStatus = !isSelf && (currentUser.isSuperAdmin || !user.is_admin);
+    const isSelf = user.id === currentUser?.id;
+    const canManageRole = currentUser?.isSuperAdmin && !isSelf && !user.is_super_admin;
+    const canDelete = !isSelf && !user.is_super_admin && (currentUser?.isSuperAdmin || !user.is_admin);
+    const canToggleStatus = !isSelf && (currentUser?.isSuperAdmin || !user.is_admin);
 
     let roleHtml = `<span class="badge">User</span>`;
     if (user.is_super_admin) roleHtml = `<span class="badge">Super Admin</span>`;
@@ -559,14 +592,17 @@ async function setUserStatus(id, status) {
   await supabaseClient.from("user").update({ status }).eq("id", id);
   const u = allUsersData.find(x => x.id === id);
   if (u) u.status = status;
+  localStorage.setItem("cache_admin_users", JSON.stringify(allUsersData));
   renderUserTable();
   showToast("Đã cập nhật trạng thái", "");
 }
 
 async function toggleAdmin(id) {
   const user = allUsersData.find(u => u.id === id);
+  if (!user) return;
   await supabaseClient.from("user").update({ is_admin: !user.is_admin }).eq("id", id);
-  if (user) user.is_admin = !user.is_admin;
+  user.is_admin = !user.is_admin;
+  localStorage.setItem("cache_admin_users", JSON.stringify(allUsersData));
   renderUserTable();
   showToast("Đã đổi quyền Admin", "");
 }
@@ -575,6 +611,7 @@ async function deleteUser(id) {
   if (!confirm("Xóa tài khoản này?")) return;
   await supabaseClient.functions.invoke("delete-user", { body: { userId: id } });
   allUsersData = allUsersData.filter(u => u.id !== id);
+  localStorage.setItem("cache_admin_users", JSON.stringify(allUsersData));
   renderUserTable();
   showToast("Đã xóa user", "");
 }
@@ -678,6 +715,7 @@ async function toggleFileStatus(id) {
   if (!file) return;
   await supabaseClient.from("file").update({ status: !file.status }).eq("id", id);
   file.status = !file.status;
+  localStorage.setItem("cache_admin_files", JSON.stringify(allFilesData));
   renderFileTable();
   showToast("Đã cập nhật trạng thái", "");
 }
@@ -690,6 +728,7 @@ async function purgeFile(id) {
   await supabaseClient.storage.from(bucket).remove([file.storage_path.replace(`${bucket}/`, "")]);
   await supabaseClient.from("file").delete().eq("id", id);
   allFilesData = allFilesData.filter(f => f.id !== id);
+  localStorage.setItem("cache_admin_files", JSON.stringify(allFilesData));
   renderFileTable();
   showToast("Đã xóa vĩnh viễn", "");
 }
@@ -698,7 +737,11 @@ function slugify(t) { return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").
 document.getElementById("btnGoToUpload")?.addEventListener("click", () => switchPage("upload"));
 document.addEventListener("click", (e) => { const nav = e.target.closest("[data-page]"); if (nav) switchPage(nav.dataset.page); });
 document.getElementById("menuToggle")?.addEventListener("click", () => elSidebar.classList.toggle("open"));
-document.getElementById("logoutBtn")?.addEventListener("click", async () => { await supabaseClient.auth.signOut(); window.location.href = "login.html"; });
+document.getElementById("logoutBtn")?.addEventListener("click", async () => {
+  localStorage.clear();
+  await supabaseClient.auth.signOut();
+  window.location.href = "login.html";
+});
 
 const pageTitles = { files: "Quản lý tài liệu", folders: "Quản lý Folder", hashtags: "Quản lý Hashtag", users: "Quản lý user", leaderboard: "Bảng xếp hạng", upload: "Upload", history: "Lịch sử", discussion: "Thảo luận", settings: "Cài đặt", account: "Tài khoản" };
 

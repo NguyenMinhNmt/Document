@@ -1,12 +1,12 @@
 /* ==========================================================================
-   USER.JS - Xử lý toàn bộ logic trang User (Tối ưu tốc độ + Hash Routing)
+   USER.JS - Tối ưu SWR (Lấy Cache hiển thị ngay + Revalidate ngầm theo Tab)
    ========================================================================== */
 
 let currentUser = null;
-let allFilesData = [];
-let allFoldersData = [];
-let allUsersData = [];
-let allHashtagsData = [];
+let allFilesData = JSON.parse(localStorage.getItem("cache_files") || "[]");
+let allFoldersData = JSON.parse(localStorage.getItem("cache_folders") || "[]");
+let allUsersData = JSON.parse(localStorage.getItem("cache_users") || "[]");
+let allHashtagsData = JSON.parse(localStorage.getItem("cache_hashtags") || "[]");
 let selectedTagsList = [];
 let toastTimer;
 
@@ -18,6 +18,11 @@ const elUserAvatar = document.getElementById("userAvatar");
 bootstrapUserPage();
 
 async function bootstrapUserPage() {
+  // 1. MỞ NGAY TAB VÀ HÀM RENDER TỪ CACHE (0.001s)
+  restorePageFromHash();
+  renderFromCache();
+
+  // 2. Kiểm tra phiên đăng nhập
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (!session) { window.location.href = "login.html"; return; }
 
@@ -35,53 +40,70 @@ async function bootstrapUserPage() {
   if (profile.is_admin) { window.location.href = "admin.html"; return; }
 
   currentUser = { id: session.user.id, name: profile.user_name || "Người dùng", email: session.user.email };
-  elUserNameLabel.textContent = currentUser.name;
-  elUserAvatar.textContent = currentUser.name.slice(0, 2).toUpperCase();
+  if (elUserNameLabel) elUserNameLabel.textContent = currentUser.name;
+  if (elUserAvatar) elUserAvatar.textContent = currentUser.name.slice(0, 2).toUpperCase();
 
   initThemeToggle(profile.color);
-
-  // Tải dữ liệu ban đầu
-  await loadInitData();
   await CommentModule.init("commentRoot", { userId: currentUser.id, isAdmin: false });
 
-  // Giữ nguyên Tab khi F5
-  restorePageFromHash();
+  // 3. REVALIDATE DỮ LIỆU CỦA ĐÚNG TAB ĐANG MỞ KHI F5
+  const currentTab = window.location.hash.replace("#", "") || "documents";
+  revalidateTabData(currentTab);
 }
 
-// Bắt sự kiện khi chuyển URL Hash hoặc bấm Back/Forward
-window.addEventListener("hashchange", restorePageFromHash);
+window.addEventListener("hashchange", () => {
+  restorePageFromHash();
+  const currentTab = window.location.hash.replace("#", "") || "documents";
+  revalidateTabData(currentTab);
+});
 
-async function loadInitData() {
-  await Promise.all([
-    loadFolders(),
-    loadUsersList(),
-    loadHashtagsList(),
-    loadAllFiles(),
-    loadLeaderboard()
-  ]);
+// Render nhanh dữ liệu từ RAM/Cache
+function renderFromCache() {
   populateFilterDropdowns();
   renderDocTable();
 }
 
+// BỘ LỌC CHỈ TẢI ĐÚNG DỮ LIỆU CẦN THIẾT CỦA TAB ĐANG DÙNG
+async function revalidateTabData(tab) {
+  if (tab === "documents") {
+    await Promise.all([loadFolders(), loadUsersList(), loadHashtagsList(), loadAllFiles()]);
+    populateFilterDropdowns();
+    renderDocTable();
+  } else if (tab === "leaderboard") {
+    await loadLeaderboard();
+  } else if (tab === "upload") {
+    await Promise.all([loadFolders(), loadHashtagsList()]);
+  }
+}
+
 async function loadFolders() {
   const { data } = await supabaseClient.from("folder").select("id, display_name, bucket_name").order("display_name");
-  allFoldersData = data || [];
-  const select = document.getElementById("uploadFolderSelect");
-  if (select) {
-    select.innerHTML = '<option value="">-- Chọn Folder --</option>' +
-      allFoldersData.map(f => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join('');
+  if (data) {
+    allFoldersData = data;
+    localStorage.setItem("cache_folders", JSON.stringify(data));
+    const select = document.getElementById("uploadFolderSelect");
+    if (select) {
+      select.innerHTML = '<option value="">-- Chọn Folder --</option>' +
+        allFoldersData.map(f => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join('');
+    }
   }
 }
 
 async function loadUsersList() {
   const { data } = await supabaseClient.from("user").select("id, user_name").order("user_name");
-  allUsersData = data || [];
+  if (data) {
+    allUsersData = data;
+    localStorage.setItem("cache_users", JSON.stringify(data));
+  }
 }
 
 async function loadHashtagsList() {
   const { data } = await supabaseClient.from("hashtag").select("id, name").order("name");
-  allHashtagsData = data || [];
-  renderAvailableTagsSelect();
+  if (data) {
+    allHashtagsData = data;
+    localStorage.setItem("cache_hashtags", JSON.stringify(data));
+    renderAvailableTagsSelect();
+  }
 }
 
 async function loadAllFiles() {
@@ -90,10 +112,13 @@ async function loadAllFiles() {
     .select("id, file_name, storage_path, bio, created_at, id_user, id_folder, status, user:id_user(user_name), folder:id_folder(display_name, bucket_name), file_hashtag(hashtag:id_hashtag(id, name))")
     .order("created_at", { ascending: false });
 
-  allFilesData = (data || []).filter(f => f.status || f.id_user === currentUser.id);
-  const countEl = document.getElementById("userFileCountLabel");
-  if (countEl) {
-    countEl.textContent = `${allFilesData.filter(f => f.id_user === currentUser.id).length} file đã upload`;
+  if (data) {
+    allFilesData = data.filter(f => f.status || f.id_user === currentUser?.id);
+    localStorage.setItem("cache_files", JSON.stringify(allFilesData));
+    const countEl = document.getElementById("userFileCountLabel");
+    if (countEl && currentUser) {
+      countEl.textContent = `${allFilesData.filter(f => f.id_user === currentUser.id).length} file đã upload`;
+    }
   }
 }
 
@@ -107,6 +132,7 @@ function populateFilterDropdowns() {
   if (fTag) fTag.innerHTML = '<option value="">Tất cả Hashtag</option>' + allHashtagsData.map(t => `<option value="${t.id}">#${escapeHTML(t.name)}</option>`).join('');
 
   [document.getElementById("filterKeyword"), fFolder, fUploader, fTag].forEach(el => {
+    el?.removeEventListener("input", renderDocTable);
     el?.addEventListener("input", renderDocTable);
   });
 }
@@ -136,7 +162,7 @@ function renderDocTable() {
   if (!body) return;
 
   body.innerHTML = filtered.map((file, idx) => {
-    const isOwner = file.id_user === currentUser.id;
+    const isOwner = file.id_user === currentUser?.id;
     const tagsHtml = (file.file_hashtag || [])
       .map(fh => fh.hashtag?.name ? `<span class="badge">#${escapeHTML(fh.hashtag.name)}</span>` : '')
       .join(' ') || '-';
@@ -158,12 +184,10 @@ function renderDocTable() {
       </tr>`;
   }).join('');
 
-  // Bấm vào hàng bất kỳ để xem file
   body.querySelectorAll("tr[data-file-id]").forEach(row => {
     row.addEventListener("click", () => openPreviewModal(row.dataset.fileId));
   });
 
-  // Tải file trực tiếp
   body.querySelectorAll("[data-download-btn]").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -310,7 +334,6 @@ document.getElementById("btnAddCustomTag")?.addEventListener("click", () => {
   }
 });
 
-// TỐI ƯU UPLOAD (Chống double click + Cập nhật nhanh)
 document.getElementById("uploadForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const submitBtn = document.getElementById("uploadSubmitBtn");
@@ -358,7 +381,7 @@ document.getElementById("uploadForm")?.addEventListener("submit", async (e) => {
     document.getElementById("uploadForm").reset();
     selectedTagsList = [];
     renderSelectedTagsBox();
-    await loadAllFiles(); // Chỉ tải lại bảng file
+    await loadAllFiles();
     renderDocTable();
     switchPage("documents");
   } catch (err) {
@@ -402,7 +425,11 @@ async function loadLeaderboard() {
 document.getElementById("btnGoToUpload")?.addEventListener("click", () => switchPage("upload"));
 document.addEventListener("click", (e) => { const nav = e.target.closest("[data-page]"); if (nav) switchPage(nav.dataset.page); });
 document.getElementById("menuToggle")?.addEventListener("click", () => elSidebar.classList.toggle("open"));
-document.getElementById("logoutBtn")?.addEventListener("click", async () => { await supabaseClient.auth.signOut(); window.location.href = "login.html"; });
+document.getElementById("logoutBtn")?.addEventListener("click", async () => {
+  localStorage.clear();
+  await supabaseClient.auth.signOut();
+  window.location.href = "login.html";
+});
 
 const pageTitles = { documents: "Tài liệu", leaderboard: "Bảng xếp hạng", upload: "Upload", discussion: "Thảo luận", account: "Tài khoản" };
 
@@ -450,7 +477,8 @@ async function deleteFile(fileId) {
   const bucket = file.folder?.bucket_name || "documents";
   await supabaseClient.storage.from(bucket).remove([file.storage_path.replace(`${bucket}/`, "")]);
   await supabaseClient.from("file").delete().eq("id", fileId);
-  showToast("Đã xóa file", "");
-  await loadAllFiles();
+  allFilesData = allFilesData.filter(f => f.id !== fileId);
+  localStorage.setItem("cache_files", JSON.stringify(allFilesData));
   renderDocTable();
+  showToast("Đã xóa file", "");
 }
