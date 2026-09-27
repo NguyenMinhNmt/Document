@@ -1,8 +1,7 @@
 /* ==========================================================================
-   ADMIN.JS - Tối ưu SWR (Fixed ReferenceError pageTitles)
+   ADMIN.JS - Tối ưu SWR + Sửa Tên File / Folder / Hashtag cho Tất cả File
    ========================================================================== */
 
-// 1. Khai báo biến & Danh sách Tab lên đầu file
 const pageTitles = {
   files: "Quản lý tài liệu",
   folders: "Quản lý Folder",
@@ -21,7 +20,9 @@ let allFilesData = JSON.parse(localStorage.getItem("cache_admin_files") || "[]")
 let allFoldersData = JSON.parse(localStorage.getItem("cache_folders") || "[]");
 let allUsersData = JSON.parse(localStorage.getItem("cache_admin_users") || "[]");
 let allHashtagsData = JSON.parse(localStorage.getItem("cache_hashtags") || "[]");
+let selectedFilterTagIds = [];
 let selectedTagsList = [];
+let editSelectedTagsList = [];
 let toastTimer;
 
 const elSidebar = document.getElementById("sidebar");
@@ -32,11 +33,9 @@ const elUserAvatar = document.getElementById("userAvatar");
 bootstrapAdminPage();
 
 async function bootstrapAdminPage() {
-  // Mở ngay Tab và render dữ liệu cũ từ Cache (0.001s)
   restorePageFromHash();
   renderFromCache();
 
-  // Kiểm tra phiên đăng nhập
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (!session) { window.location.href = "login.html"; return; }
 
@@ -66,7 +65,6 @@ async function bootstrapAdminPage() {
   initThemeToggle(profile.color);
   await CommentModule.init("commentRoot", { userId: currentUser.id, isAdmin: true });
 
-  // Tải ngầm dữ liệu mới của đúng tab đang mở khi F5
   const currentTab = window.location.hash.replace("#", "") || "files";
   revalidateTabData(currentTab);
 }
@@ -79,6 +77,7 @@ window.addEventListener("hashchange", () => {
 
 function renderFromCache() {
   populateFilterDropdowns();
+  renderHashtagFilterContainer();
   renderFileTable();
   renderFolderManageList();
   renderHashtagManageList();
@@ -89,6 +88,7 @@ async function revalidateTabData(tab) {
   if (tab === "files") {
     await Promise.all([loadFolders(), loadUsersList(), loadHashtagsList(), loadAllFiles()]);
     populateFilterDropdowns();
+    renderHashtagFilterContainer();
     renderFileTable();
   } else if (tab === "folders") {
     await loadFolders();
@@ -135,6 +135,7 @@ async function loadHashtagsList() {
     allHashtagsData = data;
     localStorage.setItem("cache_hashtags", JSON.stringify(data));
     renderAvailableTagsSelect();
+    renderHashtagFilterContainer();
   }
 }
 
@@ -153,15 +154,45 @@ async function loadAllFiles() {
 function populateFilterDropdowns() {
   const fFolder = document.getElementById("filterFolder");
   const fUploader = document.getElementById("filterUploader");
-  const fTag = document.getElementById("filterHashtag");
 
   if (fFolder) fFolder.innerHTML = '<option value="">Tất cả Folder</option>' + allFoldersData.map(f => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join('');
   if (fUploader) fUploader.innerHTML = '<option value="">Tất cả người đăng</option>' + allUsersData.map(u => `<option value="${u.id}">${escapeHTML(u.user_name)}</option>`).join('');
-  if (fTag) fTag.innerHTML = '<option value="">Tất cả Hashtag</option>' + allHashtagsData.map(t => `<option value="${t.id}">#${escapeHTML(t.name)}</option>`).join('');
 
-  [document.getElementById("filterKeyword"), fFolder, fUploader, fTag].forEach(el => {
+  [document.getElementById("filterKeyword"), fFolder, fUploader].forEach(el => {
     el?.removeEventListener("input", renderFileTable);
     el?.addEventListener("input", renderFileTable);
+  });
+}
+
+function renderHashtagFilterContainer() {
+  const container = document.getElementById("filterHashtagContainer");
+  if (!container) return;
+
+  if (allHashtagsData.length === 0) {
+    container.innerHTML = '<span style="color:var(--text-faint); font-size:0.85rem;">Chưa có hashtag nào</span>';
+    return;
+  }
+
+  container.innerHTML = allHashtagsData.map(t => {
+    const isChecked = selectedFilterTagIds.includes(t.id);
+    return `
+      <button type="button" class="badge ${isChecked ? 'active' : ''}" data-filter-tag-id="${t.id}" style="cursor:pointer; border:${isChecked ? '1px solid var(--accent-1)' : '1px solid transparent'}; background:${isChecked ? 'var(--accent-1)' : ''}; color:${isChecked ? '#fff' : ''};">
+        #${escapeHTML(t.name)} ${isChecked ? '✓' : ''}
+      </button>
+    `;
+  }).join('');
+
+  container.querySelectorAll("[data-filter-tag-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tagId = btn.dataset.filterTagId;
+      if (selectedFilterTagIds.includes(tagId)) {
+        selectedFilterTagIds = selectedFilterTagIds.filter(id => id !== tagId);
+      } else {
+        selectedFilterTagIds.push(tagId);
+      }
+      renderHashtagFilterContainer();
+      renderFileTable();
+    });
   });
 }
 
@@ -169,14 +200,19 @@ function renderFileTable() {
   const kw = (document.getElementById("filterKeyword")?.value || "").trim().toLowerCase();
   const folderId = document.getElementById("filterFolder")?.value || "";
   const uploaderId = document.getElementById("filterUploader")?.value || "";
-  const tagId = document.getElementById("filterHashtag")?.value || "";
 
   const filtered = allFilesData.filter(f => {
     const matchKw = !kw || f.file_name.toLowerCase().includes(kw) || (f.bio || "").toLowerCase().includes(kw) || (f.user?.user_name || "").toLowerCase().includes(kw);
     const matchFolder = !folderId || f.id_folder === folderId;
     const matchUploader = !uploaderId || f.id_user === uploaderId;
-    const matchTag = !tagId || (f.file_hashtag && f.file_hashtag.some(fh => fh.hashtag?.id === tagId));
-    return matchKw && matchFolder && matchUploader && matchTag;
+
+    let matchTags = true;
+    if (selectedFilterTagIds.length > 0) {
+      const fileTagIds = (f.file_hashtag || []).map(fh => fh.hashtag?.id).filter(Boolean);
+      matchTags = selectedFilterTagIds.every(reqId => fileTagIds.includes(reqId));
+    }
+
+    return matchKw && matchFolder && matchUploader && matchTags;
   });
 
   const countEl = document.getElementById("fileResultCount");
@@ -210,6 +246,7 @@ function renderFileTable() {
         <td onclick="event.stopPropagation();">
           <div class="actions">
             <button class="action-btn" data-download-btn="${file.id}" title="Tải về trực tiếp">⬇</button>
+            <button class="action-btn" data-edit-btn="${file.id}" title="Chỉnh sửa tài liệu">✏</button>
             <button class="action-btn" data-toggle-status="${file.id}" title="${file.status ? 'Ẩn' : 'Hiện'}">${file.status ? '🚫' : '↺'}</button>
             <button class="action-btn delete" data-delete-btn="${file.id}" title="Xóa vĩnh viễn">⌫</button>
           </div>
@@ -228,6 +265,13 @@ function renderFileTable() {
     });
   });
 
+  body.querySelectorAll("[data-edit-btn]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openEditModal(btn.dataset.editBtn);
+    });
+  });
+
   body.querySelectorAll("[data-toggle-status]").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -242,6 +286,134 @@ function renderFileTable() {
     });
   });
 }
+
+/* ================= MODAL SỬA FILE (ADMIN HAS ALL RIGHTS) ================= */
+function openEditModal(fileId) {
+  const file = allFilesData.find(f => f.id === fileId);
+  if (!file) return;
+
+  document.getElementById("editFileId").value = file.id;
+  document.getElementById("editFileName").value = file.file_name || "";
+  document.getElementById("editFileBio").value = file.bio || "";
+
+  // Set dropdown Folders
+  const folderSelect = document.getElementById("editFileFolder");
+  folderSelect.innerHTML = allFoldersData.map(f => `<option value="${f.id}" ${f.id === file.id_folder ? 'selected' : ''}>${escapeHTML(f.display_name)}</option>`).join('');
+
+  // Lấy danh sách Hashtags của file
+  editSelectedTagsList = (file.file_hashtag || []).map(fh => fh.hashtag?.name).filter(Boolean);
+
+  renderEditSelectedTagsBox();
+  renderEditAvailableTagsSelect();
+
+  document.getElementById("editFileModal").classList.add("open");
+}
+
+function renderEditSelectedTagsBox() {
+  const box = document.getElementById("editSelectedTagsBox");
+  if (!box) return;
+
+  if (editSelectedTagsList.length === 0) {
+    box.innerHTML = '<span style="color:var(--text-faint); font-size:0.8rem;">Chưa chọn hashtag nào</span>';
+    return;
+  }
+
+  box.innerHTML = editSelectedTagsList.map((tag, idx) => `
+    <span class="tag-chip">#${escapeHTML(tag)} <button type="button" data-remove-edit-tag="${idx}">✕</button></span>
+  `).join('');
+
+  box.querySelectorAll("[data-remove-edit-tag]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      editSelectedTagsList.splice(parseInt(btn.dataset.removeEditTag), 1);
+      renderEditSelectedTagsBox();
+      renderEditAvailableTagsSelect();
+    });
+  });
+}
+
+function renderEditAvailableTagsSelect() {
+  const select = document.getElementById("editAvailableTagsSelect");
+  if (!select) return;
+  const available = allHashtagsData.filter(t => !editSelectedTagsList.includes(t.name));
+  select.innerHTML = '<option value="">-- Chọn hashtag có sẵn --</option>' +
+    available.map(t => `<option value="${escapeHTML(t.name)}">#${escapeHTML(t.name)}</option>`).join('');
+}
+
+document.getElementById("btnEditAddSelectedTag")?.addEventListener("click", () => {
+  const val = document.getElementById("editAvailableTagsSelect").value;
+  if (val && !editSelectedTagsList.includes(val)) {
+    editSelectedTagsList.push(val);
+    renderEditSelectedTagsBox();
+    renderEditAvailableTagsSelect();
+  }
+});
+
+document.getElementById("btnEditAddCustomTag")?.addEventListener("click", () => {
+  const input = document.getElementById("editCustomTagInput");
+  const val = input.value.trim().replace(/^#/, "");
+  if (val && !editSelectedTagsList.includes(val)) {
+    editSelectedTagsList.push(val);
+    input.value = "";
+    renderEditSelectedTagsBox();
+    renderEditAvailableTagsSelect();
+  }
+});
+
+document.querySelectorAll("[data-close-edit]").forEach(el => {
+  el.addEventListener("click", () => document.getElementById("editFileModal").classList.remove("open"));
+});
+
+// Xử lý Lưu Sửa File
+document.getElementById("editFileForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fileId = document.getElementById("editFileId").value;
+  const newName = document.getElementById("editFileName").value.trim();
+  const newFolderId = document.getElementById("editFileFolder").value;
+  const newBio = document.getElementById("editFileBio").value.trim();
+  const submitBtn = document.getElementById("editFileSubmitBtn");
+
+  if (!newName) return showToast("Lỗi", "Vui lòng nhập tên file.");
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "⏳ Đang lưu...";
+
+  try {
+    // 1. Cập nhật Tên file, Folder, Mô tả
+    const { error: updateError } = await supabaseClient
+      .from("file")
+      .update({ file_name: newName, id_folder: newFolderId, bio: newBio })
+      .eq("id", fileId);
+
+    if (updateError) throw updateError;
+
+    // 2. Xóa các Hashtags cũ
+    await supabaseClient.from("file_hashtag").delete().eq("id_file", fileId);
+
+    // 3. Thêm các Hashtags mới
+    for (const tagName of editSelectedTagsList) {
+      let { data: tag } = await supabaseClient.from("hashtag").select("id").eq("name", tagName).single();
+      if (!tag) {
+        const { data: cTag } = await supabaseClient.from("hashtag").insert({ name: tagName, created_by: currentUser.id }).select().single();
+        tag = cTag;
+      }
+      if (tag) {
+        await supabaseClient.from("file_hashtag").insert({ id_file: fileId, id_hashtag: tag.id });
+      }
+    }
+
+    showToast("Thành công", "Đã cập nhật thông tin tài liệu.");
+    document.getElementById("editFileModal").classList.remove("open");
+
+    // Revalidate lại bảng file
+    await loadAllFiles();
+    renderFileTable();
+  } catch (err) {
+    showToast("Cập nhật thất bại", err.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "✓ Lưu thay đổi";
+  }
+});
 
 async function downloadFileDirectly(fileId) {
   const file = allFilesData.find(f => f.id === fileId);
@@ -425,6 +597,7 @@ document.getElementById("hashtagForm")?.addEventListener("submit", async (e) => 
     localStorage.setItem("cache_hashtags", JSON.stringify(allHashtagsData));
     renderHashtagManageList();
     renderAvailableTagsSelect();
+    renderHashtagFilterContainer();
     populateFilterDropdowns();
 
     showToast("Đã tạo Hashtag mới", `#${name}`);
@@ -444,6 +617,7 @@ async function deleteHashtag(id) {
   localStorage.setItem("cache_hashtags", JSON.stringify(allHashtagsData));
   renderHashtagManageList();
   renderAvailableTagsSelect();
+  renderHashtagFilterContainer();
   populateFilterDropdowns();
   showToast("Đã xóa Hashtag", "");
 }
