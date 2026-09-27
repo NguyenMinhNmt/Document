@@ -159,7 +159,7 @@ async function openPreviewModal(fileId) {
   if (!file) return;
 
   document.getElementById("prevFileName").textContent = file.file_name;
-  document.getElementById("prevFileFolder").textContent = file.folder?.display_name || "-";
+  document.getElementById("prevFileFolder").textContent = file.folder?.display_name || "Chưa phân folder";
   document.getElementById("prevFileUser").textContent = file.user?.user_name || "-";
   document.getElementById("prevFileTime").textContent = formatDateTime(file.created_at);
   document.getElementById("prevFileBio").textContent = file.bio || "Không có mô tả.";
@@ -169,28 +169,56 @@ async function openPreviewModal(fileId) {
     .join(' ');
   document.getElementById("prevFileTags").innerHTML = tagsHtml || '-';
 
-  const bucket = file.folder?.bucket_name || "documents";
-  const pathInsideBucket = file.storage_path.replace(`${bucket}/`, "");
+  // Xử lý tách Bucket & Path an toàn cho cả file cũ lẫn file mới
+  let bucket = "documents";
+  let pathInsideBucket = file.storage_path;
+
+  if (file.storage_path.includes("/")) {
+    const parts = file.storage_path.split("/");
+    bucket = parts[0];
+    pathInsideBucket = parts.slice(1).join("/");
+  }
+
   const ext = file.file_name.split('.').pop().toLowerCase();
 
-  const { data } = await supabaseClient.storage.from(bucket).createSignedUrl(pathInsideBucket, 300);
+  // Tạo URL tải về từ Supabase Storage
+  const { data, error } = await supabaseClient.storage.from(bucket).createSignedUrl(pathInsideBucket, 300);
   const signedUrl = data?.signedUrl || "#";
 
   document.getElementById("prevDownloadBtn").href = signedUrl;
 
   const viewerBox = document.getElementById("previewViewerBox");
+
+  if (error || !data?.signedUrl) {
+    viewerBox.innerHTML = `
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:#fff; text-align:center; padding:1.5rem;">
+        <span style="font-size:3rem; margin-bottom:1rem;">⚠️</span>
+        <p style="font-size:1rem; font-weight:600;">Không thể tải bản xem trước của file này</p>
+        <p style="font-size:0.8rem; color:#aaa; margin-top:0.5rem;">File có thể đã bị xóa hoặc đường dẫn lưu trữ cũ không khả dụng.</p>
+      </div>`;
+    document.getElementById("previewFileModal").classList.add("open");
+    return;
+  }
+
+  // Phân loại hiển thị theo định dạng file
   if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) {
-    viewerBox.innerHTML = `<img src="${signedUrl}" alt="Preview">`;
+    viewerBox.innerHTML = `<img src="${signedUrl}" alt="Preview" style="max-width:100%; max-height:100%; object-fit:contain; margin:auto; display:block;">`;
   } else if (ext === "pdf") {
-    viewerBox.innerHTML = `<iframe src="${signedUrl}"></iframe>`;
+    viewerBox.innerHTML = `<iframe src="${signedUrl}" style="width:100%; height:100%; border:none;"></iframe>`;
   } else {
-    const docViewer = `https://docs.google.com/gview?url=${encodeURIComponent(signedUrl)}&embedded=true`;
-    viewerBox.innerHTML = `<iframe src="${docViewer}"></iframe>`;
+    // Với file Word, Excel, PowerPoint (.docx, .xlsx, .pptx)
+    const docViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(signedUrl)}&embedded=true`;
+    viewerBox.innerHTML = `
+      <div style="display:flex; flex-direction:column; height:100%;">
+        <iframe src="${docViewerUrl}" style="flex:1; width:100%; border:none;"></iframe>
+        <div style="padding:0.6rem; background:#2a2a2a; color:#fff; text-align:center; font-size:0.8rem;">
+          Đang xem file <strong>.${ext.toUpperCase()}</strong>. Nếu không hiển thị, vui lòng bấm nút <a href="${signedUrl}" target="_blank" style="color:var(--accent-1); text-decoration:underline;">Tải tài liệu về</a> ở bên phải.
+        </div>
+      </div>`;
   }
 
   document.getElementById("previewFileModal").classList.add("open");
 }
-
 document.querySelectorAll("[data-close-preview]").forEach(el => {
   el.addEventListener("click", () => document.getElementById("previewFileModal").classList.remove("open"));
 });
