@@ -1,5 +1,5 @@
 /* ==========================================================================
-   ADMIN.JS - Xử lý toàn bộ logic trang Admin (Full Update)
+   ADMIN.JS - Xử lý toàn bộ logic trang Admin (Tối ưu tốc độ + Hash Routing)
    ========================================================================== */
 
 let currentUser = null;
@@ -45,12 +45,19 @@ async function bootstrapAdminPage() {
   elUserAvatar.textContent = currentUser.name.slice(0, 2).toUpperCase();
 
   initThemeToggle(profile.color);
+
+  // Tải dữ liệu ban đầu
   await loadInitData();
   await loadHistory();
   await loadSettings();
   await CommentModule.init("commentRoot", { userId: currentUser.id, isAdmin: true });
+
+  // Giữ nguyên Tab khi F5
   restorePageFromHash();
 }
+
+// Bắt sự kiện khi chuyển URL Hash hoặc bấm Back/Forward
+window.addEventListener("hashchange", restorePageFromHash);
 
 async function loadInitData() {
   await Promise.all([
@@ -102,9 +109,9 @@ function populateFilterDropdowns() {
   const fUploader = document.getElementById("filterUploader");
   const fTag = document.getElementById("filterHashtag");
 
-  fFolder.innerHTML = '<option value="">Tất cả Folder</option>' + allFoldersData.map(f => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join('');
-  fUploader.innerHTML = '<option value="">Tất cả người đăng</option>' + allUsersData.map(u => `<option value="${u.id}">${escapeHTML(u.user_name)}</option>`).join('');
-  fTag.innerHTML = '<option value="">Tất cả Hashtag</option>' + allHashtagsData.map(t => `<option value="${t.id}">#${escapeHTML(t.name)}</option>`).join('');
+  if (fFolder) fFolder.innerHTML = '<option value="">Tất cả Folder</option>' + allFoldersData.map(f => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join('');
+  if (fUploader) fUploader.innerHTML = '<option value="">Tất cả người đăng</option>' + allUsersData.map(u => `<option value="${u.id}">${escapeHTML(u.user_name)}</option>`).join('');
+  if (fTag) fTag.innerHTML = '<option value="">Tất cả Hashtag</option>' + allHashtagsData.map(t => `<option value="${t.id}">#${escapeHTML(t.name)}</option>`).join('');
 
   [document.getElementById("filterKeyword"), fFolder, fUploader, fTag].forEach(el => {
     el?.addEventListener("input", renderFileTable);
@@ -112,10 +119,10 @@ function populateFilterDropdowns() {
 }
 
 function renderFileTable() {
-  const kw = document.getElementById("filterKeyword").value.trim().toLowerCase();
-  const folderId = document.getElementById("filterFolder").value;
-  const uploaderId = document.getElementById("filterUploader").value;
-  const tagId = document.getElementById("filterHashtag").value;
+  const kw = (document.getElementById("filterKeyword")?.value || "").trim().toLowerCase();
+  const folderId = document.getElementById("filterFolder")?.value || "";
+  const uploaderId = document.getElementById("filterUploader")?.value || "";
+  const tagId = document.getElementById("filterHashtag")?.value || "";
 
   const filtered = allFilesData.filter(f => {
     const matchKw = !kw || f.file_name.toLowerCase().includes(kw) || (f.bio || "").toLowerCase().includes(kw) || (f.user?.user_name || "").toLowerCase().includes(kw);
@@ -125,11 +132,16 @@ function renderFileTable() {
     return matchKw && matchFolder && matchUploader && matchTag;
   });
 
-  document.getElementById("fileResultCount").textContent = filtered.length;
-  document.getElementById("fileEmptyState").hidden = filtered.length > 0;
-  document.querySelector("#filesPage .table-scroll").hidden = filtered.length === 0;
+  const countEl = document.getElementById("fileResultCount");
+  if (countEl) countEl.textContent = filtered.length;
+  const emptyEl = document.getElementById("fileEmptyState");
+  if (emptyEl) emptyEl.hidden = filtered.length > 0;
+  const scrollEl = document.querySelector("#filesPage .table-scroll");
+  if (scrollEl) scrollEl.hidden = filtered.length === 0;
 
   const body = document.getElementById("fileTableBody");
+  if (!body) return;
+
   body.innerHTML = filtered.map((file, idx) => {
     const statusBadge = file.status
       ? `<span class="status active">Hoạt động</span>`
@@ -158,12 +170,10 @@ function renderFileTable() {
       </tr>`;
   }).join('');
 
-  // Click hàng bất kỳ để xem
   body.querySelectorAll("tr[data-file-id]").forEach(row => {
     row.addEventListener("click", () => openPreviewModal(row.dataset.fileId));
   });
 
-  // Tải trực tiếp
   body.querySelectorAll("[data-download-btn]").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -281,26 +291,55 @@ function renderFolderManageList() {
   body.querySelectorAll("[data-delete-folder]").forEach(b => b.addEventListener("click", () => deleteFolder(b.dataset.deleteFolder)));
 }
 
+// TỐI ƯU FORM TẠO FOLDER (Chống double click + Cập nhật siêu tốc)
 document.getElementById("folderForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const name = document.getElementById("folderDisplayName").value.trim();
-  if (!name) return;
-  const bucketName = slugify(name);
+  const btn = document.getElementById("folderSubmitBtn");
+  const input = document.getElementById("folderDisplayName");
+  const name = input.value.trim();
+  if (!name || btn.disabled) return;
 
-  await supabaseClient.functions.invoke("create-bucket", { body: { bucketName } });
-  await supabaseClient.from("folder").insert({ display_name: name, bucket_name: bucketName, created_by: currentUser.id });
+  btn.disabled = true;
+  btn.textContent = "⏳ Đang tạo...";
 
-  showToast("Đã tạo Folder mới", "");
-  document.getElementById("folderForm").reset();
-  await loadInitData();
+  try {
+    const bucketName = slugify(name);
+
+    const { data: newFolder, error } = await supabaseClient
+      .from("folder")
+      .insert({ display_name: name, bucket_name: bucketName, created_by: currentUser.id })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Lệnh tạo bucket chạy ngầm
+    supabaseClient.functions.invoke("create-bucket", { body: { bucketName } });
+
+    // Cập nhật bộ nhớ RAM & Vẽ lại UI tức thì
+    allFoldersData.push(newFolder);
+    renderFolderManageList();
+    populateFilterDropdowns();
+
+    showToast("Đã tạo Folder mới", name);
+    input.value = "";
+  } catch (err) {
+    showToast("Không tạo được Folder", err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "+ Thêm Folder";
+  }
 });
 
 async function deleteFolder(id) {
   if (!confirm("Xóa Folder này?")) return;
   const { error } = await supabaseClient.from("folder").delete().eq("id", id);
   if (error) return showToast("Lỗi xóa", "Folder vẫn còn chứa file.");
+
+  allFoldersData = allFoldersData.filter(f => f.id !== id);
+  renderFolderManageList();
+  populateFilterDropdowns();
   showToast("Đã xóa Folder", "");
-  await loadInitData();
 }
 
 function renderHashtagManageList() {
@@ -317,21 +356,49 @@ function renderHashtagManageList() {
   body.querySelectorAll("[data-delete-hashtag]").forEach(b => b.addEventListener("click", () => deleteHashtag(b.dataset.deleteHashtag)));
 }
 
+// TỐI ƯU FORM TẠO HASHTAG
 document.getElementById("hashtagForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const name = document.getElementById("hashtagName").value.trim().replace(/^#/, "");
-  if (!name) return;
-  await supabaseClient.from("hashtag").insert({ name, created_by: currentUser.id });
-  showToast("Đã tạo Hashtag mới", "");
-  document.getElementById("hashtagForm").reset();
-  await loadInitData();
+  const btn = document.getElementById("hashtagSubmitBtn");
+  const input = document.getElementById("hashtagName");
+  const name = input.value.trim().replace(/^#/, "");
+  if (!name || btn.disabled) return;
+
+  btn.disabled = true;
+  btn.textContent = "⏳ Đang tạo...";
+
+  try {
+    const { data: newTag, error } = await supabaseClient
+      .from("hashtag")
+      .insert({ name, created_by: currentUser.id })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    allHashtagsData.push(newTag);
+    renderHashtagManageList();
+    renderAvailableTagsSelect();
+    populateFilterDropdowns();
+
+    showToast("Đã tạo Hashtag mới", `#${name}`);
+    input.value = "";
+  } catch (err) {
+    showToast("Không tạo được Hashtag", err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "+ Thêm Hashtag";
+  }
 });
 
 async function deleteHashtag(id) {
   if (!confirm("Xóa Hashtag này?")) return;
   await supabaseClient.from("hashtag").delete().eq("id", id);
+  allHashtagsData = allHashtagsData.filter(h => h.id !== id);
+  renderHashtagManageList();
+  renderAvailableTagsSelect();
+  populateFilterDropdowns();
   showToast("Đã xóa Hashtag", "");
-  await loadInitData();
 }
 
 function renderAvailableTagsSelect() {
@@ -385,7 +452,10 @@ document.getElementById("btnAddCustomTag")?.addEventListener("click", () => {
 document.getElementById("uploadForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const submitBtn = document.getElementById("uploadSubmitBtn");
+  if (submitBtn.disabled) return;
+
   submitBtn.disabled = true;
+  submitBtn.textContent = "⏳ Đang tải lên...";
 
   try {
     const folderId = document.getElementById("uploadFolderSelect").value;
@@ -426,24 +496,31 @@ document.getElementById("uploadForm")?.addEventListener("submit", async (e) => {
     document.getElementById("uploadForm").reset();
     selectedTagsList = [];
     renderSelectedTagsBox();
-    await loadInitData();
+    await loadAllFiles();
+    renderFileTable();
     switchPage("files");
   } catch (err) {
     showToast("Thất bại", err.message);
   } finally {
     submitBtn.disabled = false;
+    submitBtn.textContent = "⬆ Tải lên";
   }
 });
 
 function renderUserTable() {
-  const kw = document.getElementById("userSearchInput").value.trim().toLowerCase();
+  const kw = (document.getElementById("userSearchInput")?.value || "").trim().toLowerCase();
   const list = allUsersData.filter(u => (u.user_name || "").toLowerCase().includes(kw));
 
-  document.getElementById("userResultCount").textContent = list.length;
-  document.getElementById("userEmptyState").hidden = list.length > 0;
-  document.querySelector("#usersPage .table-scroll").hidden = list.length === 0;
+  const countEl = document.getElementById("userResultCount");
+  if (countEl) countEl.textContent = list.length;
+  const emptyEl = document.getElementById("userEmptyState");
+  if (emptyEl) emptyEl.hidden = list.length > 0;
+  const scrollEl = document.querySelector("#usersPage .table-scroll");
+  if (scrollEl) scrollEl.hidden = list.length === 0;
 
   const body = document.getElementById("userTableBody");
+  if (!body) return;
+
   body.innerHTML = list.map(user => {
     const isSelf = user.id === currentUser.id;
     const canManageRole = currentUser.isSuperAdmin && !isSelf && !user.is_super_admin;
@@ -480,22 +557,26 @@ function renderUserTable() {
 
 async function setUserStatus(id, status) {
   await supabaseClient.from("user").update({ status }).eq("id", id);
+  const u = allUsersData.find(x => x.id === id);
+  if (u) u.status = status;
+  renderUserTable();
   showToast("Đã cập nhật trạng thái", "");
-  await loadInitData();
 }
 
 async function toggleAdmin(id) {
   const user = allUsersData.find(u => u.id === id);
   await supabaseClient.from("user").update({ is_admin: !user.is_admin }).eq("id", id);
+  if (user) user.is_admin = !user.is_admin;
+  renderUserTable();
   showToast("Đã đổi quyền Admin", "");
-  await loadInitData();
 }
 
 async function deleteUser(id) {
   if (!confirm("Xóa tài khoản này?")) return;
   await supabaseClient.functions.invoke("delete-user", { body: { userId: id } });
+  allUsersData = allUsersData.filter(u => u.id !== id);
+  renderUserTable();
   showToast("Đã xóa user", "");
-  await loadInitData();
 }
 
 async function loadLeaderboard() {
@@ -517,13 +598,15 @@ async function loadLeaderboard() {
   podiumBox.innerHTML = podiumHtml;
 
   const restUsers = users.slice(3);
-  restBody.innerHTML = restUsers.map((u, i) => `
-    <tr>
-      <td><strong>#${i + 4}</strong></td>
-      <td>${escapeHTML(u.user_name)}</td>
-      <td><strong>${u.score || 0}</strong> tài liệu</td>
-    </tr>
-  `).join('');
+  if (restBody) {
+    restBody.innerHTML = restUsers.map((u, i) => `
+      <tr>
+        <td><strong>#${i + 4}</strong></td>
+        <td>${escapeHTML(u.user_name)}</td>
+        <td><strong>${u.score || 0}</strong> tài liệu</td>
+      </tr>
+    `).join('');
+  }
 }
 
 async function loadHistory() {
@@ -536,24 +619,30 @@ async function loadHistory() {
   const aEntries = (aHist.data || []).map(h => ({ time: h.created_at, target: h.target?.user_name || "-", actor: h.actor?.user_name || "-", action: h.action }));
   const merged = [...fEntries, ...aEntries].sort((a, b) => new Date(b.time) - new Date(a.time));
 
-  document.getElementById("historyEmptyState").hidden = merged.length > 0;
-  document.querySelector("#historyPage .table-scroll").hidden = merged.length === 0;
-  document.getElementById("historyTableBody").innerHTML = merged.map(h => `
-    <tr>
-      <td>${formatDateTime(h.time)}</td>
-      <td>${escapeHTML(h.target)}</td>
-      <td>${escapeHTML(h.actor)}</td>
-      <td>${escapeHTML(h.action)}</td>
-    </tr>
-  `).join('');
+  const emptyEl = document.getElementById("historyEmptyState");
+  if (emptyEl) emptyEl.hidden = merged.length > 0;
+  const scrollEl = document.querySelector("#historyPage .table-scroll");
+  if (scrollEl) scrollEl.hidden = merged.length === 0;
+
+  const body = document.getElementById("historyTableBody");
+  if (body) {
+    body.innerHTML = merged.map(h => `
+      <tr>
+        <td>${formatDateTime(h.time)}</td>
+        <td>${escapeHTML(h.target)}</td>
+        <td>${escapeHTML(h.actor)}</td>
+        <td>${escapeHTML(h.action)}</td>
+      </tr>
+    `).join('');
+  }
 }
 
 async function loadSettings() {
   const { data } = await supabaseClient.from("site_setting").select("phone, email, facebook").eq("id", 1).single();
   if (!data) return;
-  document.getElementById("settingPhone").value = data.phone || "";
-  document.getElementById("settingEmail").value = data.email || "";
-  document.getElementById("settingFacebook").value = data.facebook || "";
+  if (document.getElementById("settingPhone")) document.getElementById("settingPhone").value = data.phone || "";
+  if (document.getElementById("settingEmail")) document.getElementById("settingEmail").value = data.email || "";
+  if (document.getElementById("settingFacebook")) document.getElementById("settingFacebook").value = data.facebook || "";
 }
 
 document.getElementById("settingsForm")?.addEventListener("submit", async (e) => {
@@ -586,19 +675,23 @@ document.getElementById("accountForm")?.addEventListener("submit", async (e) => 
 
 async function toggleFileStatus(id) {
   const file = allFilesData.find(f => f.id === id);
+  if (!file) return;
   await supabaseClient.from("file").update({ status: !file.status }).eq("id", id);
+  file.status = !file.status;
+  renderFileTable();
   showToast("Đã cập nhật trạng thái", "");
-  await loadInitData();
 }
 
 async function purgeFile(id) {
   if (!confirm("Xóa vĩnh viễn file này?")) return;
   const file = allFilesData.find(f => f.id === id);
+  if (!file) return;
   const bucket = file.folder?.bucket_name || "documents";
   await supabaseClient.storage.from(bucket).remove([file.storage_path.replace(`${bucket}/`, "")]);
   await supabaseClient.from("file").delete().eq("id", id);
+  allFilesData = allFilesData.filter(f => f.id !== id);
+  renderFileTable();
   showToast("Đã xóa vĩnh viễn", "");
-  await loadInitData();
 }
 
 function slugify(t) { return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""); }
@@ -608,15 +701,30 @@ document.getElementById("menuToggle")?.addEventListener("click", () => elSidebar
 document.getElementById("logoutBtn")?.addEventListener("click", async () => { await supabaseClient.auth.signOut(); window.location.href = "login.html"; });
 
 const pageTitles = { files: "Quản lý tài liệu", folders: "Quản lý Folder", hashtags: "Quản lý Hashtag", users: "Quản lý user", leaderboard: "Bảng xếp hạng", upload: "Upload", history: "Lịch sử", discussion: "Thảo luận", settings: "Cài đặt", account: "Tài khoản" };
+
 function switchPage(p) {
-  document.querySelectorAll(".nav-item").forEach(i => i.classList.toggle("active", i.dataset.page === p));
+  const targetPage = pageTitles[p] ? p : "files";
+
+  document.querySelectorAll(".nav-item").forEach(i => i.classList.toggle("active", i.dataset.page === targetPage));
   document.querySelectorAll(".page").forEach(s => s.classList.remove("active"));
-  document.getElementById(`${p}Page`)?.classList.add("active");
-  elBreadcrumbCurrent.textContent = pageTitles[p] || "Quản lý tài liệu";
-  elSidebar.classList.remove("open");
-  if (window.location.hash !== `#${p}`) history.replaceState(null, "", `#${p}`);
+
+  const activeEl = document.getElementById(`${targetPage}Page`);
+  if (activeEl) activeEl.classList.add("active");
+
+  if (elBreadcrumbCurrent) elBreadcrumbCurrent.textContent = pageTitles[targetPage];
+  if (elSidebar) elSidebar.classList.remove("open");
+
+  if (window.location.hash !== `#${targetPage}`) {
+    history.pushState(null, "", `#${targetPage}`);
+  }
 }
-function restorePageFromHash() { const s = window.location.hash.replace("#", ""); if (s && pageTitles[s]) switchPage(s); }
+
+function restorePageFromHash() {
+  const saved = window.location.hash.replace("#", "");
+  if (saved && pageTitles[saved]) switchPage(saved);
+  else switchPage("files");
+}
+
 function showToast(t, m) { clearTimeout(toastTimer); document.getElementById("toastTitle").textContent = t; document.getElementById("toastMessage").textContent = m; document.getElementById("toast").classList.add("show"); toastTimer = setTimeout(() => document.getElementById("toast").classList.remove("show"), 2800); }
 function formatDate(iso) { return new Date(iso).toLocaleDateString("vi-VN"); }
 function formatDateTime(iso) { return new Date(iso).toLocaleString("vi-VN"); }

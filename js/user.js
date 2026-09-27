@@ -1,5 +1,5 @@
 /* ==========================================================================
-   USER.JS - Xử lý toàn bộ logic trang User (Full Update)
+   USER.JS - Xử lý toàn bộ logic trang User (Tối ưu tốc độ + Hash Routing)
    ========================================================================== */
 
 let currentUser = null;
@@ -39,10 +39,17 @@ async function bootstrapUserPage() {
   elUserAvatar.textContent = currentUser.name.slice(0, 2).toUpperCase();
 
   initThemeToggle(profile.color);
+
+  // Tải dữ liệu ban đầu
   await loadInitData();
   await CommentModule.init("commentRoot", { userId: currentUser.id, isAdmin: false });
+
+  // Giữ nguyên Tab khi F5
   restorePageFromHash();
 }
+
+// Bắt sự kiện khi chuyển URL Hash hoặc bấm Back/Forward
+window.addEventListener("hashchange", restorePageFromHash);
 
 async function loadInitData() {
   await Promise.all([
@@ -84,7 +91,10 @@ async function loadAllFiles() {
     .order("created_at", { ascending: false });
 
   allFilesData = (data || []).filter(f => f.status || f.id_user === currentUser.id);
-  document.getElementById("userFileCountLabel").textContent = `${allFilesData.filter(f => f.id_user === currentUser.id).length} file đã upload`;
+  const countEl = document.getElementById("userFileCountLabel");
+  if (countEl) {
+    countEl.textContent = `${allFilesData.filter(f => f.id_user === currentUser.id).length} file đã upload`;
+  }
 }
 
 function populateFilterDropdowns() {
@@ -92,9 +102,9 @@ function populateFilterDropdowns() {
   const fUploader = document.getElementById("filterUploader");
   const fTag = document.getElementById("filterHashtag");
 
-  fFolder.innerHTML = '<option value="">Tất cả Folder</option>' + allFoldersData.map(f => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join('');
-  fUploader.innerHTML = '<option value="">Tất cả người đăng</option>' + allUsersData.map(u => `<option value="${u.id}">${escapeHTML(u.user_name)}</option>`).join('');
-  fTag.innerHTML = '<option value="">Tất cả Hashtag</option>' + allHashtagsData.map(t => `<option value="${t.id}">#${escapeHTML(t.name)}</option>`).join('');
+  if (fFolder) fFolder.innerHTML = '<option value="">Tất cả Folder</option>' + allFoldersData.map(f => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join('');
+  if (fUploader) fUploader.innerHTML = '<option value="">Tất cả người đăng</option>' + allUsersData.map(u => `<option value="${u.id}">${escapeHTML(u.user_name)}</option>`).join('');
+  if (fTag) fTag.innerHTML = '<option value="">Tất cả Hashtag</option>' + allHashtagsData.map(t => `<option value="${t.id}">#${escapeHTML(t.name)}</option>`).join('');
 
   [document.getElementById("filterKeyword"), fFolder, fUploader, fTag].forEach(el => {
     el?.addEventListener("input", renderDocTable);
@@ -102,10 +112,10 @@ function populateFilterDropdowns() {
 }
 
 function renderDocTable() {
-  const kw = document.getElementById("filterKeyword").value.trim().toLowerCase();
-  const folderId = document.getElementById("filterFolder").value;
-  const uploaderId = document.getElementById("filterUploader").value;
-  const tagId = document.getElementById("filterHashtag").value;
+  const kw = (document.getElementById("filterKeyword")?.value || "").trim().toLowerCase();
+  const folderId = document.getElementById("filterFolder")?.value || "";
+  const uploaderId = document.getElementById("filterUploader")?.value || "";
+  const tagId = document.getElementById("filterHashtag")?.value || "";
 
   const filtered = allFilesData.filter(f => {
     const matchKw = !kw || f.file_name.toLowerCase().includes(kw) || (f.bio || "").toLowerCase().includes(kw);
@@ -115,11 +125,16 @@ function renderDocTable() {
     return matchKw && matchFolder && matchUploader && matchTag;
   });
 
-  document.getElementById("docResultCount").textContent = filtered.length;
-  document.getElementById("docEmptyState").hidden = filtered.length > 0;
-  document.querySelector("#documentsPage .table-scroll").hidden = filtered.length === 0;
+  const countEl = document.getElementById("docResultCount");
+  if (countEl) countEl.textContent = filtered.length;
+  const emptyEl = document.getElementById("docEmptyState");
+  if (emptyEl) emptyEl.hidden = filtered.length > 0;
+  const scrollEl = document.querySelector("#documentsPage .table-scroll");
+  if (scrollEl) scrollEl.hidden = filtered.length === 0;
 
   const body = document.getElementById("docTableBody");
+  if (!body) return;
+
   body.innerHTML = filtered.map((file, idx) => {
     const isOwner = file.id_user === currentUser.id;
     const tagsHtml = (file.file_hashtag || [])
@@ -143,12 +158,12 @@ function renderDocTable() {
       </tr>`;
   }).join('');
 
-  // Click hàng bất kỳ để mở preview
+  // Bấm vào hàng bất kỳ để xem file
   body.querySelectorAll("tr[data-file-id]").forEach(row => {
     row.addEventListener("click", () => openPreviewModal(row.dataset.fileId));
   });
 
-  // Tải trực tiếp
+  // Tải file trực tiếp
   body.querySelectorAll("[data-download-btn]").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -295,10 +310,14 @@ document.getElementById("btnAddCustomTag")?.addEventListener("click", () => {
   }
 });
 
+// TỐI ƯU UPLOAD (Chống double click + Cập nhật nhanh)
 document.getElementById("uploadForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const submitBtn = document.getElementById("uploadSubmitBtn");
+  if (submitBtn.disabled) return;
+
   submitBtn.disabled = true;
+  submitBtn.textContent = "⏳ Đang tải lên...";
 
   try {
     const folderId = document.getElementById("uploadFolderSelect").value;
@@ -339,12 +358,14 @@ document.getElementById("uploadForm")?.addEventListener("submit", async (e) => {
     document.getElementById("uploadForm").reset();
     selectedTagsList = [];
     renderSelectedTagsBox();
-    await loadInitData();
+    await loadAllFiles(); // Chỉ tải lại bảng file
+    renderDocTable();
     switchPage("documents");
   } catch (err) {
     showToast("Thất bại", err.message);
   } finally {
     submitBtn.disabled = false;
+    submitBtn.textContent = "⬆ Tải lên";
   }
 });
 
@@ -367,13 +388,15 @@ async function loadLeaderboard() {
   podiumBox.innerHTML = podiumHtml;
 
   const restUsers = users.slice(3);
-  restBody.innerHTML = restUsers.map((u, i) => `
-    <tr>
-      <td><strong>#${i + 4}</strong></td>
-      <td>${escapeHTML(u.user_name)}</td>
-      <td><strong>${u.score || 0}</strong> tài liệu</td>
-    </tr>
-  `).join('');
+  if (restBody) {
+    restBody.innerHTML = restUsers.map((u, i) => `
+      <tr>
+        <td><strong>#${i + 4}</strong></td>
+        <td>${escapeHTML(u.user_name)}</td>
+        <td><strong>${u.score || 0}</strong> tài liệu</td>
+      </tr>
+    `).join('');
+  }
 }
 
 document.getElementById("btnGoToUpload")?.addEventListener("click", () => switchPage("upload"));
@@ -382,15 +405,30 @@ document.getElementById("menuToggle")?.addEventListener("click", () => elSidebar
 document.getElementById("logoutBtn")?.addEventListener("click", async () => { await supabaseClient.auth.signOut(); window.location.href = "login.html"; });
 
 const pageTitles = { documents: "Tài liệu", leaderboard: "Bảng xếp hạng", upload: "Upload", discussion: "Thảo luận", account: "Tài khoản" };
+
 function switchPage(p) {
-  document.querySelectorAll(".nav-item").forEach(i => i.classList.toggle("active", i.dataset.page === p));
+  const targetPage = pageTitles[p] ? p : "documents";
+
+  document.querySelectorAll(".nav-item").forEach(i => i.classList.toggle("active", i.dataset.page === targetPage));
   document.querySelectorAll(".page").forEach(s => s.classList.remove("active"));
-  document.getElementById(`${p}Page`)?.classList.add("active");
-  elBreadcrumbCurrent.textContent = pageTitles[p] || "Tài liệu";
-  elSidebar.classList.remove("open");
-  if (window.location.hash !== `#${p}`) history.replaceState(null, "", `#${p}`);
+
+  const activeEl = document.getElementById(`${targetPage}Page`);
+  if (activeEl) activeEl.classList.add("active");
+
+  if (elBreadcrumbCurrent) elBreadcrumbCurrent.textContent = pageTitles[targetPage];
+  if (elSidebar) elSidebar.classList.remove("open");
+
+  if (window.location.hash !== `#${targetPage}`) {
+    history.pushState(null, "", `#${targetPage}`);
+  }
 }
-function restorePageFromHash() { const s = window.location.hash.replace("#", ""); if (s && pageTitles[s]) switchPage(s); }
+
+function restorePageFromHash() {
+  const saved = window.location.hash.replace("#", "");
+  if (saved && pageTitles[saved]) switchPage(saved);
+  else switchPage("documents");
+}
+
 function showToast(t, m) { clearTimeout(toastTimer); document.getElementById("toastTitle").textContent = t; document.getElementById("toastMessage").textContent = m; document.getElementById("toast").classList.add("show"); toastTimer = setTimeout(() => document.getElementById("toast").classList.remove("show"), 2800); }
 function formatDate(iso) { return new Date(iso).toLocaleDateString("vi-VN"); }
 function formatDateTime(iso) { return new Date(iso).toLocaleString("vi-VN"); }
@@ -413,5 +451,6 @@ async function deleteFile(fileId) {
   await supabaseClient.storage.from(bucket).remove([file.storage_path.replace(`${bucket}/`, "")]);
   await supabaseClient.from("file").delete().eq("id", fileId);
   showToast("Đã xóa file", "");
-  await loadInitData();
+  await loadAllFiles();
+  renderDocTable();
 }
