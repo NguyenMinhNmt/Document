@@ -1394,3 +1394,220 @@ input:checked+.slider {
 input:checked+.slider:before {
   transform: translateX(16px);
 }
+
+/* Sửa lỗi Font chữ hiển thị dấu tiếng Việt */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.brand strong,
+.modal-header h2,
+.stat-copy strong {
+  font-family: "Be Vietnam Pro", sans-serif !important;
+  font-weight: 700;
+}
+
+/* Công tắc Dark Mode Sidebar */
+.sidebar-theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  margin-top: auto;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 22px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #ccc;
+  transition: .3s;
+  border-radius: 22px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+}
+
+input:checked+.slider {
+  background-color: var(--accent-1);
+}
+
+input:checked+.slider:before {
+  transform: translateX(16px);
+}
+
+/* Khung Bảng Xếp Hạng Top 3 Podium */
+.podium-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+  padding: 1.5rem 0;
+}
+
+.podium-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  text-align: center;
+  flex: 1;
+  max-width: 220px;
+  position: relative;
+  transition: transform 0.2s;
+}
+
+.podium-card.rank-1 {
+  border-color: #f59e0b;
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.2);
+  transform: translateY(-12px);
+}
+
+.podium-badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--border-color);
+  color: #fff;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+}
+
+.podium-card.rank-1 .podium-badge {
+  background: #f59e0b;
+}
+
+.podium-card.rank-2 .podium-badge {
+  background: #9ca3af;
+}
+
+.podium-card.rank-3 .podium-badge {
+  background: #d97706;
+}
+
+.podium-avatar {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  margin: 0.5rem auto 0.75rem;
+  background: var(--text-main);
+  color: var(--bg-panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+/* Modal Xem trước File dạng Chia Đôi (Split View) */
+.preview-modal-dialog {
+  max-width: 95vw !important;
+  width: 1200px !important;
+  height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.preview-viewer {
+  flex: 1.8;
+  background: #1e1e1e;
+  border-right: 1px solid var(--border-color);
+}
+
+.preview-viewer iframe,
+.preview-viewer img {
+  width: 100%;
+  height: 100%;
+  border: none;
+  object-fit: contain;
+}
+
+.preview-sidebar {
+  flex: 1;
+  padding: 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Interactive Tag Picker */
+.tag-picker-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.tag-box {
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  min-height: 50px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--accent-soft-bg);
+  color: var(--accent-1);
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.tag-chip button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--color-danger);
+  font-weight: 700;
+}

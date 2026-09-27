@@ -7,8 +7,7 @@
   <title>Trang quản trị - Web Tài Liệu</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Literata:opsz,wght@6..72,500;6..72,600;6..72,700&display=swap"
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -28,7 +27,8 @@
 
       <nav aria-label="Điều hướng chính">
         <p class="nav-label">QUẢN TRỊ</p>
-        <button class="nav-item active" data-page="files"><span class="nav-icon">▦</span> Quản lý file</button>
+        <button class="nav-item active" data-page="files"><span class="nav-icon">▦</span> Quản lý tài liệu</button>
+        <button class="nav-item" data-page="folders"><span class="nav-icon">📁</span> Quản lý Folder</button>
         <button class="nav-item" data-page="hashtags"><span class="nav-icon">#</span> Quản lý Hashtag</button>
         <button class="nav-item" data-page="users"><span class="nav-icon">☺</span> Quản lý user</button>
         <button class="nav-item" data-page="leaderboard"><span class="nav-icon">🏆</span> Bảng xếp hạng</button>
@@ -39,7 +39,6 @@
         <button class="nav-item" data-page="account"><span class="nav-icon">👤</span> Tài khoản</button>
       </nav>
 
-      <!-- CÔNG TẮC DARK MODE Ở GÓC BÊN TRÁI SIDEBAR -->
       <div class="sidebar-theme-toggle">
         <span>Chế độ tối</span>
         <label class="switch">
@@ -58,36 +57,63 @@
     <main class="main-content">
       <header class="topbar">
         <button class="icon-button menu-toggle" id="menuToggle" aria-label="Mở menu">☰</button>
-        <div class="breadcrumb"><span>Trang Admin</span><b>/</b><strong id="breadcrumbCurrent">Quản lý file</strong>
+        <div class="breadcrumb"><span>Trang Admin</span><b>/</b><strong id="breadcrumbCurrent">Quản lý tài liệu</strong>
         </div>
       </header>
 
       <div class="page-wrap">
 
-        <!-- ================= TAB: QUẢN LÝ FILE ================= -->
+        <!-- ================= TAB: QUẢN LÝ TÀI LIỆU (GỘP BỘ LỌC TÌM KIẾM) ================= -->
         <section class="page active" id="filesPage">
           <div class="page-heading">
             <div>
-              <h1>Quản lý file</h1>
-              <p>Xem, sửa, khôi phục hoặc xóa vĩnh viễn mọi file trong hệ thống</p>
+              <h1>Quản lý tài liệu</h1>
+              <p>Xem, kiểm duyệt, sửa hoặc xóa mọi tài liệu trong hệ thống</p>
             </div>
+            <button class="button button-primary" id="btnGoToUpload">+ Tải lên tài liệu</button>
           </div>
+
+          <!-- Khung lọc đa năng -->
+          <section class="card" style="margin-bottom: 1.5rem; padding: 1.25rem;">
+            <div class="form-field" style="margin-bottom: 1rem;">
+              <input class="form-control" type="search" id="filterKeyword"
+                placeholder="Tìm kiếm theo tên tài liệu, mô tả, người đăng...">
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+              <div class="form-field">
+                <label>Folder tài liệu</label>
+                <select class="form-control" id="filterFolder">
+                  <option value="">Tất cả Folder</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label>Người đăng tải</label>
+                <select class="form-control" id="filterUploader">
+                  <option value="">Tất cả người đăng</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label>Hashtag</label>
+                <select class="form-control" id="filterHashtag">
+                  <option value="">Tất cả Hashtag</option>
+                </select>
+              </div>
+            </div>
+          </section>
 
           <section class="card">
             <div class="table-toolbar">
-              <label class="search-box" style="max-width:100%;"><span>⌕</span>
-                <input id="fileSearchInput" type="search" placeholder="Tìm theo ID, tên file, hashtag, người upload...">
-              </label>
-              <div class="result-count"><strong id="fileResultCount">0</strong> file</div>
+              <div class="result-count">Tổng cộng <strong id="fileResultCount">0</strong> tài liệu</div>
             </div>
             <div class="table-scroll">
               <table>
                 <thead>
                   <tr>
-                    <th>ID</th>
-                    <th>Tên file</th>
+                    <th>STT</th>
+                    <th>Tên tài liệu</th>
+                    <th>Folder</th>
                     <th>Hashtags</th>
-                    <th>Người upload</th>
+                    <th>Người đăng tải</th>
                     <th>Trạng thái</th>
                     <th>Ngày tạo</th>
                     <th>Thao tác</th>
@@ -98,7 +124,42 @@
             </div>
             <div class="empty-state" id="fileEmptyState" hidden>
               <div>▦</div>
-              <h3>Không có file nào</h3>
+              <h3>Không tìm thấy tài liệu nào</h3>
+            </div>
+          </section>
+        </section>
+
+        <!-- ================= TAB: QUẢN LÝ FOLDER ================= -->
+        <section class="page" id="foldersPage">
+          <div class="page-heading">
+            <div>
+              <h1>Quản lý Folder</h1>
+              <p>Tạo folder mới sẽ tự động khởi tạo Storage Bucket</p>
+            </div>
+          </div>
+
+          <section class="card">
+            <form id="folderForm" class="form-grid" style="padding:1.25rem;">
+              <div class="form-field full">
+                <label for="folderDisplayName">Tên Folder hiển thị</label>
+                <div style="display:flex; gap:0.75rem;">
+                  <input class="form-control" type="text" id="folderDisplayName" placeholder="VD: Đề thi THPTQG"
+                    required style="flex:1;">
+                  <button type="submit" class="button button-primary" id="folderSubmitBtn">+ Thêm Folder</button>
+                </div>
+              </div>
+            </form>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Tên Folder</th>
+                    <th>Tên Bucket Storage</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="folderManageBody"></tbody>
+              </table>
             </div>
           </section>
         </section>
@@ -108,22 +169,21 @@
           <div class="page-heading">
             <div>
               <h1>Quản lý Hashtag</h1>
-              <p>Thêm hashtag mới thủ công hoặc chỉnh sửa / xóa các hashtag hiện có</p>
+              <p>Tạo mới hoặc chỉnh sửa/xóa các hashtag trong hệ thống</p>
             </div>
           </div>
 
           <section class="card">
             <form id="hashtagForm" class="form-grid" style="padding:1.25rem;">
               <div class="form-field full">
-                <label for="hashtagName">Tên Hashtag mới (không cần nhập dấu #)</label>
-                <div style="display:flex;gap:0.75rem;">
+                <label for="hashtagName">Tên Hashtag mới</label>
+                <div style="display:flex; gap:0.75rem;">
                   <input class="form-control" type="text" id="hashtagName" placeholder="VD: Toan12" required
                     style="flex:1;">
                   <button type="submit" class="button button-primary" id="hashtagSubmitBtn">+ Thêm Hashtag</button>
                 </div>
               </div>
             </form>
-
             <div class="table-scroll">
               <table>
                 <thead>
@@ -151,7 +211,7 @@
           <section class="card">
             <div class="table-toolbar">
               <label class="search-box" style="max-width:100%;"><span>⌕</span>
-                <input id="userSearchInput" type="search" placeholder="Tìm theo tên...">
+                <input id="userSearchInput" type="search" placeholder="Tìm theo tên user...">
               </label>
               <div class="result-count"><strong id="userResultCount">0</strong> user</div>
             </div>
@@ -160,10 +220,9 @@
                 <thead>
                   <tr>
                     <th>Tên</th>
-                    <th>Giới tính</th>
                     <th>Trạng thái</th>
                     <th>Vai trò</th>
-                    <th>Số file đã up</th>
+                    <th>Số tài liệu đã up</th>
                     <th>Đăng nhập gần nhất</th>
                     <th>Thao tác</th>
                   </tr>
@@ -178,52 +237,92 @@
           </section>
         </section>
 
-        <!-- ================= TAB: BẢNG XẾP HẠNG ================= -->
+        <!-- ================= TAB: BẢNG XẾP HẠNG (VINH DANH TOP 3) ================= -->
         <section class="page" id="leaderboardPage">
           <div class="page-heading">
             <div>
               <h1>Bảng xếp hạng</h1>
-              <p>Top người đóng góp nhiều tài liệu nhất hệ thống</p>
+              <p>Vinh danh thành viên đóng góp nhiều nhất</p>
             </div>
           </div>
 
+          <div class="podium-container" id="podiumTop3"></div>
+
           <section class="card">
-            <div id="leaderboardList" style="padding:1.25rem;"></div>
+            <div class="card-header">
+              <h2>Danh sách đóng góp</h2>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Hạng</th>
+                    <th>Thành viên</th>
+                    <th>Số tài liệu đóng góp</th>
+                  </tr>
+                </thead>
+                <tbody id="leaderboardRestBody"></tbody>
+              </table>
+            </div>
           </section>
         </section>
 
-        <!-- ================= TAB: UPLOAD ================= -->
+        <!-- ================= TAB: UPLOAD (TAG PICKER BÊN CHỌN BÊN THÊM) ================= -->
         <section class="page" id="uploadPage">
           <div class="page-heading">
-            <div>
-              <h1>Tải file lên hệ thống</h1>
-              <p>File sẽ được gắn các hashtag bạn nhập bên dưới</p>
-            </div>
+            <h1>Tải file lên hệ thống</h1>
           </div>
 
           <section class="card">
             <form id="uploadForm" class="form-grid single" style="padding:1.5rem;">
               <div class="form-field">
-                <label for="uploadName">Tên file hiển thị (để trống sẽ giữ nguyên tên file gốc)</label>
-                <input class="form-control" type="text" id="uploadName" placeholder="VD: Báo cáo tháng 8">
+                <label for="uploadName">Tên file hiển thị (để trống sẽ giữ nguyên tên gốc)</label>
+                <input class="form-control" type="text" id="uploadName" placeholder="VD: Báo cáo tài chính">
               </div>
+
               <div class="form-field">
-                <label for="uploadHashtags">Gắn Hashtags (cách nhau bởi dấu phẩy)</label>
-                <input class="form-control" type="text" id="uploadHashtags" placeholder="VD: Toan12, DeThi, LuyenThi"
-                  required>
+                <label for="uploadFolder">Chọn Folder tài liệu</label>
+                <select class="form-control" id="uploadFolderSelect" required>
+                  <option value="">-- Chọn Folder --</option>
+                </select>
               </div>
+
               <div class="form-field">
-                <label for="uploadFile">Chọn file (PDF, Word, Excel, JPG, PNG - tối đa 50MB)</label>
-                <input class="form-control" type="file" id="uploadFile"
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" required>
+                <label>Gắn Hashtags</label>
+                <div class="tag-picker-wrap">
+                  <label style="font-size:0.75rem; color:var(--text-sub);">Hashtags đã chọn:</label>
+                  <div class="tag-box" id="selectedTagsBox">
+                    <span style="color:var(--text-faint); font-size:0.8rem;" id="noTagsNotice">Chưa chọn hashtag
+                      nào</span>
+                  </div>
+
+                  <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.4rem;">
+                    <select class="form-control" id="availableTagsSelect" style="flex:1;">
+                      <option value="">-- Chọn hashtag có sẵn --</option>
+                    </select>
+                    <button type="button" class="button button-secondary" id="btnAddSelectedTag">+ Thêm</button>
+                  </div>
+
+                  <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.4rem;">
+                    <input class="form-control" type="text" id="customTagInput" placeholder="Hoặc nhập Hashtag mới..."
+                      style="flex:1;">
+                    <button type="button" class="button button-secondary" id="btnAddCustomTag">+ Tạo mới</button>
+                  </div>
+                </div>
               </div>
+
               <div class="form-field">
-                <label for="uploadBio">Mô tả file</label>
-                <textarea class="form-control" id="uploadBio" placeholder="Mô tả ngắn gọn nội dung file..."></textarea>
+                <label for="uploadFile">Chọn file (PDF, Word, Excel, JPG, PNG)</label>
+                <input class="form-control" type="file" id="uploadFile" required>
               </div>
-              <button type="submit" class="button button-primary" id="uploadSubmitBtn" style="justify-content:center;">
-                ⬆ Tải lên
-              </button>
+
+              <div class="form-field">
+                <label for="uploadBio">Mô tả tài liệu</label>
+                <textarea class="form-control" id="uploadBio" placeholder="Mô tả ngắn gọn..."></textarea>
+              </div>
+
+              <button type="submit" class="button button-primary" id="uploadSubmitBtn" style="justify-content:center;">⬆
+                Tải lên</button>
             </form>
           </section>
         </section>
@@ -231,19 +330,15 @@
         <!-- ================= TAB: LỊCH SỬ ================= -->
         <section class="page" id="historyPage">
           <div class="page-heading">
-            <div>
-              <h1>Lịch sử thao tác file</h1>
-              <p>Ai đã thêm / sửa / xóa file nào, lúc nào</p>
-            </div>
+            <h1>Lịch sử thao tác hệ thống</h1>
           </div>
-
           <section class="card">
             <div class="table-scroll">
               <table>
                 <thead>
                   <tr>
                     <th>Thời gian</th>
-                    <th>Đối tượng (file / user)</th>
+                    <th>Đối tượng</th>
                     <th>Người thực hiện</th>
                     <th>Hành động</th>
                   </tr>
@@ -253,7 +348,7 @@
             </div>
             <div class="empty-state" id="historyEmptyState" hidden>
               <div>⏱</div>
-              <h3>Chưa có lịch sử nào</h3>
+              <h3>Chưa có lịch sử</h3>
             </div>
           </section>
         </section>
@@ -261,10 +356,7 @@
         <!-- ================= TAB: THẢO LUẬN ================= -->
         <section class="page" id="discussionPage">
           <div class="page-heading">
-            <div>
-              <h1>Bảng tin chung</h1>
-              <p>Admin có thể xóa bất kỳ bình luận nào để kiểm duyệt</p>
-            </div>
+            <h1>Bảng tin chung</h1>
           </div>
           <div id="commentRoot"></div>
         </section>
@@ -272,29 +364,17 @@
         <!-- ================= TAB: CÀI ĐẶT ================= -->
         <section class="page" id="settingsPage">
           <div class="page-heading">
-            <div>
-              <h1>Thông tin liên hệ</h1>
-              <p>Hiển thị ở trang Đăng nhập để user cần hỗ trợ liên hệ được</p>
-            </div>
+            <h1>Thông tin liên hệ</h1>
           </div>
-
           <section class="card">
             <form id="settingsForm" class="form-grid single" style="padding:1.5rem;">
-              <div class="form-field">
-                <label for="settingPhone">Số điện thoại / Zalo</label>
-                <input class="form-control" type="text" id="settingPhone" placeholder="VD: 0901234567">
+              <div class="form-field"><label>SĐT / Zalo</label><input class="form-control" type="text"
+                  id="settingPhone"></div>
+              <div class="form-field"><label>Email</label><input class="form-control" type="email" id="settingEmail">
               </div>
-              <div class="form-field">
-                <label for="settingEmail">Email liên hệ</label>
-                <input class="form-control" type="email" id="settingEmail" placeholder="VD: admin@congty.com">
-              </div>
-              <div class="form-field">
-                <label for="settingFacebook">Link Facebook</label>
-                <input class="form-control" type="text" id="settingFacebook" placeholder="VD: https://facebook.com/...">
-              </div>
-              <div class="form-field">
-                <button type="submit" class="button button-primary" id="settingsSubmitBtn">✓ Lưu thay đổi</button>
-              </div>
+              <div class="form-field"><label>Facebook</label><input class="form-control" type="text"
+                  id="settingFacebook"></div>
+              <button type="submit" class="button button-primary" id="settingsSubmitBtn">✓ Lưu cài đặt</button>
             </form>
           </section>
         </section>
@@ -302,41 +382,63 @@
         <!-- ================= TAB: TÀI KHOẢN ================= -->
         <section class="page" id="accountPage">
           <div class="page-heading">
-            <div>
-              <h1>Cập nhật tài khoản</h1>
-              <p>Đổi tên hiển thị hoặc mật khẩu — cần nhập đúng mật khẩu hiện tại</p>
-            </div>
+            <h1>Cập nhật tài khoản Admin</h1>
           </div>
-
           <section class="card">
             <form id="accountForm" class="form-grid single" style="padding:1.5rem;">
-              <div class="form-field">
-                <label for="accountNewName">Tên hiển thị mới (để trống nếu không đổi)</label>
-                <input class="form-control" type="text" id="accountNewName" placeholder="Tên hiển thị mới">
-              </div>
-              <div class="form-field">
-                <label for="accountNewPassword">Mật khẩu mới (để trống nếu không đổi)</label>
-                <input class="form-control" type="password" id="accountNewPassword" placeholder="Tối thiểu 6 ký tự">
-              </div>
-              <div class="form-field">
-                <label for="accountConfirmPassword">Nhập lại mật khẩu mới</label>
-                <input class="form-control" type="password" id="accountConfirmPassword"
-                  placeholder="Nhập lại mật khẩu mới">
-              </div>
-              <div class="form-field">
-                <label for="accountCurrentPassword">Mật khẩu HIỆN TẠI (bắt buộc để xác thực)</label>
-                <input class="form-control" type="password" id="accountCurrentPassword"
-                  placeholder="Nhập mật khẩu đang dùng" required>
-              </div>
-              <div class="form-field">
-                <button type="submit" class="button button-primary" id="accountSubmitBtn">✓ Cập nhật</button>
-              </div>
+              <div class="form-field"><label>Tên hiển thị mới</label><input class="form-control" type="text"
+                  id="accountNewName"></div>
+              <div class="form-field"><label>Mật khẩu mới</label><input class="form-control" type="password"
+                  id="accountNewPassword"></div>
+              <div class="form-field"><label>Nhập lại mật khẩu mới</label><input class="form-control" type="password"
+                  id="accountConfirmPassword"></div>
+              <div class="form-field"><label>Mật khẩu HIỆN TẠI</label><input class="form-control" type="password"
+                  id="accountCurrentPassword" required></div>
+              <button type="submit" class="button button-primary" id="accountSubmitBtn">✓ Cập nhật</button>
             </form>
           </section>
         </section>
 
       </div>
     </main>
+  </div>
+
+  <!-- MODAL XEM TRƯỚC FILE SPLIT VIEW -->
+  <div class="modal" id="previewFileModal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-preview></div>
+    <section class="modal-dialog preview-modal-dialog">
+      <div class="modal-header">
+        <h2>Chi tiết tài liệu (Admin Mode)</h2>
+        <button class="close-button" data-close-preview>×</button>
+      </div>
+      <div class="preview-layout">
+        <div class="preview-viewer" id="previewViewerBox"></div>
+        <div class="preview-sidebar">
+          <div><span class="eyebrow">TÊN TÀI LIỆU</span>
+            <h2 id="prevFileName" style="font-size:1.1rem; margin-top:0.2rem;">-</h2>
+          </div>
+          <div><span class="eyebrow">FOLDER</span>
+            <p id="prevFileFolder" style="font-weight:600;">-</p>
+          </div>
+          <div><span class="eyebrow">HASHTAGS</span>
+            <div id="prevFileTags" style="display:flex; flex-wrap:wrap; gap:0.3rem; margin-top:0.3rem;">-</div>
+          </div>
+          <div><span class="eyebrow">NGƯỜI ĐĂNG TẢI</span>
+            <p id="prevFileUser">-</p>
+          </div>
+          <div><span class="eyebrow">THỜI GIAN ĐĂNG</span>
+            <p id="prevFileTime" style="font-size:0.85rem; color:var(--text-sub);">-</p>
+          </div>
+          <div><span class="eyebrow">MÔ TẢ</span>
+            <p id="prevFileBio" style="font-size:0.85rem; color:var(--text-main); white-space:pre-wrap;">-</p>
+          </div>
+          <div style="margin-top:auto;">
+            <a class="button button-primary" id="prevDownloadBtn" href="#" target="_blank"
+              style="width:100%; justify-content:center;">⬇ Tải tài liệu về</a>
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
 
   <div class="toast" id="toast"><span>✓</span>

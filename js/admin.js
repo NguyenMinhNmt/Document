@@ -1,16 +1,13 @@
 /* ==========================================================================
-   ADMIN.JS - Xử lý toàn bộ trang Admin:
-   Quản lý file / Quản lý Hashtag / Quản lý user / Upload / Lịch sử / Thảo luận
-   Dùng cho: html/admin.html
-   Phụ thuộc: js/config.js, js/comment.js (nhúng TRƯỚC file này)
+   ADMIN.JS - Xử lý toàn bộ logic trang Admin (Full Update)
    ========================================================================== */
 
-// ---------- 1. TRẠNG THÁI DÙNG CHUNG TOÀN FILE ----------
-const BUCKET_NAME = "documents";
 let currentUser = null;
-let hashtagListAdmin = [];
-let allFiles = [];
-let allUsers = [];
+let allFilesData = [];
+let allFoldersData = [];
+let allUsersData = [];
+let allHashtagsData = [];
+let selectedTagsList = [];
 let toastTimer;
 
 const elSidebar = document.getElementById("sidebar");
@@ -18,23 +15,19 @@ const elBreadcrumbCurrent = document.getElementById("breadcrumbCurrent");
 const elUserNameLabel = document.getElementById("userNameLabel");
 const elUserAvatar = document.getElementById("userAvatar");
 
-// ---------- 2. KHỞI CHẠY TRANG ----------
 bootstrapAdminPage();
 
 async function bootstrapAdminPage() {
   const { data: { session } } = await supabaseClient.auth.getSession();
-  if (!session) {
-    window.location.href = "login.html";
-    return;
-  }
+  if (!session) { window.location.href = "login.html"; return; }
 
-  const { data: profile, error } = await supabaseClient
+  const { data: profile } = await supabaseClient
     .from("user")
     .select("user_name, status, is_admin, is_super_admin, color")
     .eq("id", session.user.id)
     .single();
 
-  if (error || !profile || !profile.status || !profile.is_admin) {
+  if (!profile || !profile.status || !profile.is_admin) {
     await supabaseClient.auth.signOut();
     window.location.href = "login.html";
     return;
@@ -45,777 +38,539 @@ async function bootstrapAdminPage() {
     name: profile.user_name || "Admin",
     email: session.user.email,
     isAdmin: true,
-    isSuperAdmin: !!profile.is_super_admin,
+    isSuperAdmin: !!profile.is_super_admin
   };
 
   elUserNameLabel.textContent = currentUser.name + (currentUser.isSuperAdmin ? " (Super Admin)" : "");
   elUserAvatar.textContent = currentUser.name.slice(0, 2).toUpperCase();
 
   initThemeToggle(profile.color);
-  await loadHashtagsAdmin();
-  await loadFiles();
-  await loadUsers();
+  await loadInitData();
   await loadHistory();
   await loadSettings();
-  await loadLeaderboard();
   await CommentModule.init("commentRoot", { userId: currentUser.id, isAdmin: true });
   restorePageFromHash();
 }
 
-// ---------- 3. ĐIỀU HƯỚNG ----------
-document.addEventListener("click", (event) => {
-  const nav = event.target.closest("[data-page]");
-  if (nav) switchPage(nav.dataset.page);
-});
+async function loadInitData() {
+  await Promise.all([
+    loadFolders(),
+    loadUsersList(),
+    loadHashtagsList(),
+    loadAllFiles(),
+    loadLeaderboard()
+  ]);
+  populateFilterDropdowns();
+  renderFileTable();
+  renderFolderManageList();
+  renderHashtagManageList();
+}
 
-document.getElementById("menuToggle").addEventListener("click", () => {
-  elSidebar.classList.toggle("open");
-});
-
-document.getElementById("logoutBtn").addEventListener("click", async () => {
-  await supabaseClient.auth.signOut();
-  window.location.href = "login.html";
-});
-
-const pageTitles = {
-  files: "Quản lý file",
-  hashtags: "Quản lý Hashtag",
-  users: "Quản lý user",
-  leaderboard: "Bảng xếp hạng",
-  upload: "Upload",
-  history: "Lịch sử",
-  discussion: "Thảo luận",
-  settings: "Cài đặt",
-  account: "Tài khoản",
-};
-
-function switchPage(page) {
-  document.querySelectorAll(".nav-item").forEach((item) => {
-    item.classList.toggle("active", item.dataset.page === page);
-  });
-  document.querySelectorAll(".page").forEach((section) => section.classList.remove("active"));
-  document.getElementById(`${page}Page`).classList.add("active");
-  elBreadcrumbCurrent.textContent = pageTitles[page];
-  elSidebar.classList.remove("open");
-
-  if (window.location.hash !== `#${page}`) {
-    history.replaceState(null, "", `#${page}`);
+// 1. TẢI DỮ LIỆU CƠ BẢN
+async function loadFolders() {
+  const { data } = await supabaseClient.from("folder").select("id, display_name, bucket_name").order("display_name");
+  allFoldersData = data || [];
+  const select = document.getElementById("uploadFolderSelect");
+  if (select) {
+    select.innerHTML = '<option value="">-- Chọn Folder --</option>' +
+      allFoldersData.map(f => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join('');
   }
 }
 
-function restorePageFromHash() {
-  const savedPage = window.location.hash.replace("#", "");
-  if (savedPage && pageTitles[savedPage]) {
-    switchPage(savedPage);
-  }
+async function loadUsersList() {
+  const { data } = await supabaseClient.from("user").select("id, user_name, status, is_admin, is_super_admin, last_sign_in_at").order("user_name");
+  allUsersData = data || [];
+  renderUserTable();
 }
 
-// ==========================================================================
-// TAB: QUẢN LÝ FILE
-// ==========================================================================
+async function loadHashtagsList() {
+  const { data } = await supabaseClient.from("hashtag").select("id, name, created_at").order("name");
+  allHashtagsData = data || [];
+  renderAvailableTagsSelect();
+}
 
-document.getElementById("fileSearchInput").addEventListener("input", renderFileTable);
-
-async function loadFiles() {
-  const { data, error } = await supabaseClient
+async function loadAllFiles() {
+  const { data } = await supabaseClient
     .from("file")
-    .select("id, file_name, storage_path, status, created_at, id_user, user:id_user(user_name), file_hashtag(hashtag:id_hashtag(name))")
+    .select("id, file_name, storage_path, bio, created_at, id_user, id_folder, status, user:id_user(user_name), folder:id_folder(display_name, bucket_name), file_hashtag(hashtag:id_hashtag(id, name))")
     .order("created_at", { ascending: false });
 
-  if (error) {
-    showToast("Không tải được file", error.message);
-    return;
-  }
+  allFilesData = data || [];
+}
 
-  allFiles = data || [];
-  renderFileTable();
+// 2. BỘ LỌC TÌM KIẾM TỔNG HỢP (TAB TÀI LIỆU)
+function populateFilterDropdowns() {
+  const fFolder = document.getElementById("filterFolder");
+  const fUploader = document.getElementById("filterUploader");
+  const fTag = document.getElementById("filterHashtag");
+
+  fFolder.innerHTML = '<option value="">Tất cả Folder</option>' + allFoldersData.map(f => `<option value="${f.id}">${escapeHTML(f.display_name)}</option>`).join('');
+  fUploader.innerHTML = '<option value="">Tất cả người đăng</option>' + allUsersData.map(u => `<option value="${u.id}">${escapeHTML(u.user_name)}</option>`).join('');
+  fTag.innerHTML = '<option value="">Tất cả Hashtag</option>' + allHashtagsData.map(t => `<option value="${t.id}">#${escapeHTML(t.name)}</option>`).join('');
+
+  [document.getElementById("filterKeyword"), fFolder, fUploader, fTag].forEach(el => {
+    el?.addEventListener("input", renderFileTable);
+  });
 }
 
 function renderFileTable() {
-  const rawKeyword = document.getElementById("fileSearchInput").value.trim().toLowerCase().replace(/^#/, "");
+  const kw = document.getElementById("filterKeyword").value.trim().toLowerCase();
+  const folderId = document.getElementById("filterFolder").value;
+  const uploaderId = document.getElementById("filterUploader").value;
+  const tagId = document.getElementById("filterHashtag").value;
 
-  const list = allFiles.filter((file) => {
-    const tagsText = (file.file_hashtag || []).map(fh => fh.hashtag?.name || "").join(" ").toLowerCase();
-    const haystack = `${file.id} ${file.file_name} ${file.user?.user_name || ""} ${tagsText}`.toLowerCase();
-    return haystack.includes(rawKeyword);
+  const filtered = allFilesData.filter(f => {
+    const matchKw = !kw || f.file_name.toLowerCase().includes(kw) || (f.bio || "").toLowerCase().includes(kw) || (f.user?.user_name || "").toLowerCase().includes(kw);
+    const matchFolder = !folderId || f.id_folder === folderId;
+    const matchUploader = !uploaderId || f.id_user === uploaderId;
+    const matchTag = !tagId || (f.file_hashtag && f.file_hashtag.some(fh => fh.hashtag?.id === tagId));
+    return matchKw && matchFolder && matchUploader && matchTag;
   });
 
-  document.getElementById("fileResultCount").textContent = list.length;
-  document.getElementById("fileEmptyState").hidden = list.length > 0;
-  document.querySelector("#filesPage .table-scroll").hidden = list.length === 0;
+  document.getElementById("fileResultCount").textContent = filtered.length;
+  document.getElementById("fileEmptyState").hidden = filtered.length > 0;
+  document.querySelector("#filesPage .table-scroll").hidden = filtered.length === 0;
 
   const body = document.getElementById("fileTableBody");
-  body.innerHTML = list.map(renderFileRow).join("");
-  attachFileRowEvents(body);
+  body.innerHTML = filtered.map((file, idx) => {
+    const statusBadge = file.status
+      ? `<span class="status active">Hoạt động</span>`
+      : `<span class="status inactive">Đã ẩn</span>`;
+
+    const tagsHtml = (file.file_hashtag || [])
+      .map(fh => fh.hashtag?.name ? `<span class="badge">#${escapeHTML(fh.hashtag.name)}</span>` : '')
+      .join(' ') || '-';
+
+    return /* html */ `
+      <tr data-file-id="${file.id}">
+        <td>${idx + 1}</td>
+        <td><strong>${escapeHTML(file.file_name)}</strong></td>
+        <td>${escapeHTML(file.folder?.display_name || "-")}</td>
+        <td>${tagsHtml}</td>
+        <td>${escapeHTML(file.user?.user_name || "-")}</td>
+        <td>${statusBadge}</td>
+        <td>${formatDate(file.created_at)}</td>
+        <td>
+          <div class="actions">
+            <button class="action-btn" data-preview-btn="${file.id}" title="Xem chi tiết">👁</button>
+            <button class="action-btn" data-toggle-status="${file.id}" title="${file.status ? 'Ẩn' : 'Hiện'}">${file.status ? '🚫' : '↺'}</button>
+            <button class="action-btn delete" data-delete-btn="${file.id}" title="Xóa vĩnh viễn">⌫</button>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  body.querySelectorAll("[data-preview-btn]").forEach(btn => btn.addEventListener("click", () => openPreviewModal(btn.dataset.previewBtn)));
+  body.querySelectorAll("[data-toggle-status]").forEach(btn => btn.addEventListener("click", () => toggleFileStatus(btn.dataset.toggleStatus)));
+  body.querySelectorAll("[data-delete-btn]").forEach(btn => btn.addEventListener("click", () => purgeFile(btn.dataset.deleteBtn)));
 }
 
-function renderFileRow(file) {
-  const statusHtml = file.status
-    ? `<span class="status active">Hoạt động</span>`
-    : `<span class="status inactive">Đã xóa mềm</span>`;
+// 3. MODAL XEM TRƯỚC FILE SPLIT VIEW
+async function openPreviewModal(fileId) {
+  const file = allFilesData.find(f => f.id === fileId);
+  if (!file) return;
+
+  document.getElementById("prevFileName").textContent = file.file_name;
+  document.getElementById("prevFileFolder").textContent = file.folder?.display_name || "-";
+  document.getElementById("prevFileUser").textContent = file.user?.user_name || "-";
+  document.getElementById("prevFileTime").textContent = formatDateTime(file.created_at);
+  document.getElementById("prevFileBio").textContent = file.bio || "Không có mô tả.";
 
   const tagsHtml = (file.file_hashtag || [])
     .map(fh => fh.hashtag?.name ? `<span class="badge">#${escapeHTML(fh.hashtag.name)}</span>` : '')
-    .join(' ') || '-';
+    .join(' ');
+  document.getElementById("prevFileTags").innerHTML = tagsHtml || '-';
 
-  return /* html */ `
-    <tr data-file-id="${file.id}" data-storage-path="${escapeAttr(file.storage_path)}" data-status="${file.status}">
-      <td>#${file.id.slice(0, 8)}...</td>
-      <td>${escapeHTML(file.file_name)}</td>
-      <td>${tagsHtml}</td>
-      <td>${escapeHTML(file.user?.user_name || "-")}</td>
-      <td>${statusHtml}</td>
-      <td>${formatDate(file.created_at)}</td>
-      <td>
-        <div class="actions">
-          <button class="action-btn" data-view-file title="Xem">👁</button>
-          <button class="action-btn" data-download-file title="Tải về">⬇</button>
-          <button class="action-btn" data-rename-file title="Đổi tên">✎</button>
-          <button class="action-btn" data-toggle-status="${file.status}" title="${file.status ? "Ẩn file" : "Hiện lại file"}">${file.status ? "🚫" : "↺"}</button>
-          <button class="action-btn delete" data-purge-file title="Xóa vĩnh viễn">⌫</button>
-        </div>
-      </td>
-    </tr>`;
-}
+  const bucket = file.folder?.bucket_name || "documents";
+  const pathInsideBucket = file.storage_path.replace(`${bucket}/`, "");
+  const ext = file.file_name.split('.').pop().toLowerCase();
 
-function attachFileRowEvents(container) {
-  container.querySelectorAll("tr[data-file-id]").forEach((row) => {
-    const fileId = row.dataset.fileId;
-    const storagePath = row.dataset.storagePath;
+  const { data } = await supabaseClient.storage.from(bucket).createSignedUrl(pathInsideBucket, 300);
+  const signedUrl = data?.signedUrl || "#";
 
-    row.querySelector("[data-view-file]")?.addEventListener("click", () => {
-      const newTab = window.open("", "_blank");
-      openFileUrl(storagePath, false, newTab);
-    });
-    row.querySelector("[data-download-file]")?.addEventListener("click", () => {
-      const newTab = window.open("", "_blank");
-      openFileUrl(storagePath, true, newTab);
-    });
-    row.querySelector("[data-rename-file]")?.addEventListener("click", () => renameFile(fileId, row));
-    const toggleBtn = row.querySelector("[data-toggle-status]");
-    if (toggleBtn) {
-      const currentStatus = toggleBtn.dataset.toggleStatus === "true";
-      toggleBtn.addEventListener("click", () => toggleFileStatus(fileId, currentStatus));
-    }
-    row.querySelector("[data-purge-file]")?.addEventListener("click", () => purgeFile(fileId));
-  });
-}
+  document.getElementById("prevDownloadBtn").href = signedUrl;
 
-async function openFileUrl(storagePath, isDownload, targetWindow) {
-  const bucketName = storagePath.split("/")[0];
-  const pathInsideBucket = storagePath.split("/").slice(1).join("/");
-  const extension = pathInsideBucket.split(".").pop().toLowerCase();
-
-  const { data, error } = await supabaseClient.storage
-    .from(bucketName)
-    .createSignedUrl(pathInsideBucket, 300, isDownload ? { download: true } : undefined);
-
-  if (error) {
-    showToast("Không mở được file", error.message);
-    targetWindow?.close();
-    return;
+  const viewerBox = document.getElementById("previewViewerBox");
+  if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) {
+    viewerBox.innerHTML = `<img src="${signedUrl}" alt="Preview">`;
+  } else if (ext === "pdf") {
+    viewerBox.innerHTML = `<iframe src="${signedUrl}"></iframe>`;
+  } else {
+    const docViewer = `https://docs.google.com/gview?url=${encodeURIComponent(signedUrl)}&embedded=true`;
+    viewerBox.innerHTML = `<iframe src="${docViewer}"></iframe>`;
   }
 
-  if (isDownload) {
-    if (targetWindow) targetWindow.location.href = data.signedUrl;
-    else window.open(data.signedUrl, "_blank");
-    return;
-  }
-
-  const officeExtensions = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"];
-  const finalUrl = officeExtensions.includes(extension)
-    ? `https://docs.google.com/gview?url=${encodeURIComponent(data.signedUrl)}&embedded=true`
-    : data.signedUrl;
-
-  if (targetWindow) targetWindow.location.href = finalUrl;
-  else window.open(finalUrl, "_blank");
+  document.getElementById("previewFileModal").classList.add("open");
 }
 
-async function renameFile(fileId, row) {
-  const oldName = row.children[1].textContent;
-  const newName = prompt("Nhập tên mới cho file:", oldName);
-  if (!newName || newName.trim() === "" || newName === oldName) return;
+document.querySelectorAll("[data-close-preview]").forEach(el => el.addEventListener("click", () => document.getElementById("previewFileModal").classList.remove("open")));
 
-  const { error } = await supabaseClient
-    .from("file")
-    .update({ file_name: newName.trim(), updated_at: new Date().toISOString() })
-    .eq("id", fileId);
+// 4. QUẢN LÝ FOLDER & HASHTAG ADMIN
+function renderFolderManageList() {
+  const body = document.getElementById("folderManageBody");
+  if (!body) return;
+  body.innerHTML = allFoldersData.map(f => `
+    <tr>
+      <td><strong>${escapeHTML(f.display_name)}</strong></td>
+      <td><code>${escapeHTML(f.bucket_name)}</code></td>
+      <td><button class="action-btn delete" data-delete-folder="${f.id}">⌫</button></td>
+    </tr>
+  `).join('');
 
-  if (error) return showToast("Không đổi tên được", error.message);
-
-  await logHistory(fileId, "Đã sửa");
-  showToast("Đã đổi tên file", "");
-  await loadFiles();
+  body.querySelectorAll("[data-delete-folder]").forEach(b => b.addEventListener("click", () => deleteFolder(b.dataset.deleteFolder)));
 }
 
-async function toggleFileStatus(fileId, currentStatus) {
-  const newStatus = !currentStatus;
-  const { error } = await supabaseClient.from("file").update({ status: newStatus }).eq("id", fileId);
-  if (error) return showToast("Không cập nhật được", error.message);
+document.getElementById("folderForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = document.getElementById("folderDisplayName").value.trim();
+  if (!name) return;
+  const bucketName = slugify(name);
 
-  await logHistory(fileId, newStatus ? "Đã sửa" : "Đã xóa");
-  showToast(newStatus ? "Đã hiện lại file" : "Đã ẩn file", "");
-  await loadFiles();
-}
+  await supabaseClient.functions.invoke("create-bucket", { body: { bucketName } });
+  await supabaseClient.from("folder").insert({ display_name: name, bucket_name: bucketName, created_by: currentUser.id });
 
-async function purgeFile(fileId) {
-  const file = allFiles.find((f) => f.id === fileId);
-  if (!file) return;
-  if (!confirm(`XÓA VĨNH VIỄN file "${file.file_name}"?`)) return;
+  showToast("Đã tạo Folder mới", "");
+  document.getElementById("folderForm").reset();
+  await loadInitData();
+});
 
-  try {
-    await supabaseClient.from("history_file").delete().eq("id_file", fileId);
-
-    const bucketName = file.storage_path.split("/")[0];
-    const pathInsideBucket = file.storage_path.split("/").slice(1).join("/");
-    await supabaseClient.storage.from(bucketName).remove([pathInsideBucket]);
-
-    const { error } = await supabaseClient.from("file").delete().eq("id", fileId);
-    if (error) throw error;
-
-    showToast("Đã xóa vĩnh viễn", `File "${file.file_name}" đã bị xóa.`);
-    await loadFiles();
-    await loadHistory();
-    await loadLeaderboard();
-  } catch (error) {
-    showToast("Không xóa vĩnh viễn được", error.message);
-  }
-}
-
-async function logHistory(fileId, change) {
-  await supabaseClient.from("history_file").insert({ id_file: fileId, id_user: currentUser.id, change });
-}
-
-// ==========================================================================
-// TAB: QUẢN LÝ HASHTAG
-// ==========================================================================
-
-async function loadHashtagsAdmin() {
-  const { data, error } = await supabaseClient
-    .from("hashtag")
-    .select("id, name, created_at")
-    .order("name");
-
-  if (error) return showToast("Không tải được Hashtag", error.message);
-
-  hashtagListAdmin = data || [];
-  renderHashtagManageList();
+async function deleteFolder(id) {
+  if (!confirm("Xóa Folder này?")) return;
+  const { error } = await supabaseClient.from("folder").delete().eq("id", id);
+  if (error) return showToast("Lỗi xóa", "Folder vẫn còn chứa file.");
+  showToast("Đã xóa Folder", "");
+  await loadInitData();
 }
 
 function renderHashtagManageList() {
   const body = document.getElementById("hashtagManageBody");
   if (!body) return;
-
-  body.innerHTML = hashtagListAdmin.map((h) => /* html */ `
-    <tr data-hashtag-id="${h.id}">
+  body.innerHTML = allHashtagsData.map(h => `
+    <tr>
       <td><strong>#${escapeHTML(h.name)}</strong></td>
       <td>${formatDate(h.created_at)}</td>
-      <td>
-        <div class="actions">
-          <button class="action-btn" data-edit-hashtag="${h.id}" title="Sửa tên">✎</button>
-          <button class="action-btn delete" data-delete-hashtag="${h.id}" title="Xóa">⌫</button>
-        </div>
-      </td>
+      <td><button class="action-btn delete" data-delete-hashtag="${h.id}">⌫</button></td>
     </tr>
-  `).join("");
+  `).join('');
 
-  body.querySelectorAll("[data-edit-hashtag]").forEach((btn) => {
-    btn.addEventListener("click", () => handleEditHashtag(btn.dataset.editHashtag));
-  });
-  body.querySelectorAll("[data-delete-hashtag]").forEach((btn) => {
-    btn.addEventListener("click", () => handleDeleteHashtag(btn.dataset.deleteHashtag));
-  });
+  body.querySelectorAll("[data-delete-hashtag]").forEach(b => b.addEventListener("click", () => deleteHashtag(b.dataset.deleteHashtag)));
 }
 
-document.getElementById("hashtagForm")?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const submitBtn = document.getElementById("hashtagSubmitBtn");
-  const input = document.getElementById("hashtagName");
-  const tagName = input.value.trim().replace(/^#/, "");
-
-  if (!tagName) return;
-  submitBtn.disabled = true;
-
-  const { error } = await supabaseClient.from("hashtag").insert({
-    name: tagName,
-    created_by: currentUser.id
-  });
-
-  submitBtn.disabled = false;
-  if (error) return showToast("Không tạo được Hashtag", error.message);
-
-  showToast("Đã tạo Hashtag mới", `#${tagName}`);
-  input.value = "";
-  await loadHashtagsAdmin();
+document.getElementById("hashtagForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = document.getElementById("hashtagName").value.trim().replace(/^#/, "");
+  if (!name) return;
+  await supabaseClient.from("hashtag").insert({ name, created_by: currentUser.id });
+  showToast("Đã tạo Hashtag mới", "");
+  document.getElementById("hashtagForm").reset();
+  await loadInitData();
 });
 
-async function handleEditHashtag(hashtagId) {
-  const tag = hashtagListAdmin.find((h) => h.id === hashtagId);
-  const newName = prompt("Nhập tên Hashtag mới (không nhập dấu #):", tag?.name || "");
-  const cleanName = (newName || "").trim().replace(/^#/, "");
-
-  if (!cleanName || cleanName === tag?.name) return;
-
-  const { error } = await supabaseClient
-    .from("hashtag")
-    .update({ name: cleanName })
-    .eq("id", hashtagId);
-
-  if (error) return showToast("Không đổi tên được", error.message);
-
-  showToast("Đã cập nhật Hashtag", `#${cleanName}`);
-  await loadHashtagsAdmin();
-  await loadFiles();
-}
-
-async function handleDeleteHashtag(hashtagId) {
-  const tag = hashtagListAdmin.find((h) => h.id === hashtagId);
-  if (!confirm(`Xóa Hashtag #${tag?.name}? Các file đang gắn hashtag này sẽ bị gỡ thẻ.`)) return;
-
-  const { error } = await supabaseClient.from("hashtag").delete().eq("id", hashtagId);
-
-  if (error) return showToast("Không xóa được Hashtag", error.message);
-
+async function deleteHashtag(id) {
+  if (!confirm("Xóa Hashtag này?")) return;
+  await supabaseClient.from("hashtag").delete().eq("id", id);
   showToast("Đã xóa Hashtag", "");
-  await loadHashtagsAdmin();
-  await loadFiles();
+  await loadInitData();
 }
 
-// ==========================================================================
-// TAB: QUẢN LÝ USER
-// ==========================================================================
-
-document.getElementById("userSearchInput").addEventListener("input", renderUserTable);
-
-async function loadUsers() {
-  const { data, error } = await supabaseClient
-    .from("user")
-    .select("id, user_name, gender, status, is_admin, is_super_admin, last_sign_in_at")
-    .order("created_at", { ascending: false });
-
-  if (error) return showToast("Không tải được user", error.message);
-
-  allUsers = data || [];
-  await loadUserFileCounts();
-  renderUserTable();
+// 5. INTERACTIVE TAG PICKER & UPLOAD ADMIN
+function renderAvailableTagsSelect() {
+  const select = document.getElementById("availableTagsSelect");
+  if (!select) return;
+  const available = allHashtagsData.filter(t => !selectedTagsList.includes(t.name));
+  select.innerHTML = '<option value="">-- Chọn hashtag có sẵn --</option>' +
+    available.map(t => `<option value="${escapeHTML(t.name)}">#${escapeHTML(t.name)}</option>`).join('');
 }
 
-async function loadUserFileCounts() {
-  const results = await Promise.all(
-    allUsers.map(async (u) => {
-      const { count } = await supabaseClient
-        .from("file")
-        .select("id", { count: "exact", head: true })
-        .eq("id_user", u.id);
-      return { id: u.id, count: count || 0 };
-    })
-  );
-  const countMap = Object.fromEntries(results.map((r) => [r.id, r.count]));
-  allUsers = allUsers.map((u) => ({ ...u, fileCount: countMap[u.id] || 0 }));
-}
-
-function renderUserTable() {
-  const keyword = document.getElementById("userSearchInput").value.trim().toLowerCase();
-  const list = allUsers.filter((u) => (u.user_name || "").toLowerCase().includes(keyword));
-
-  document.getElementById("userResultCount").textContent = list.length;
-  document.getElementById("userEmptyState").hidden = list.length > 0;
-  document.querySelector("#usersPage .table-scroll").hidden = list.length === 0;
-
-  const body = document.getElementById("userTableBody");
-  body.innerHTML = list.map(renderUserRow).join("");
-  attachUserRowEvents(body);
-}
-
-function renderUserRow(user) {
-  const statusHtml = user.status
-    ? `<span class="status active">Đã duyệt</span>`
-    : `<span class="status inactive">Chờ duyệt</span>`;
-
-  let roleHtml = `<span class="badge">User</span>`;
-  if (user.is_super_admin) roleHtml = `<span class="badge">Super Admin</span>`;
-  else if (user.is_admin) roleHtml = `<span class="badge">Admin</span>`;
-
-  const isSelf = user.id === currentUser.id;
-  const canManageRole = currentUser.isSuperAdmin && !isSelf && !user.is_super_admin;
-  const canDelete = !isSelf && !user.is_super_admin && (currentUser.isSuperAdmin || !user.is_admin);
-  const canToggleStatus = !isSelf && (currentUser.isSuperAdmin || !user.is_admin);
-
-  return /* html */ `
-    <tr data-user-id="${user.id}">
-      <td>${escapeHTML(user.user_name || "-")}</td>
-      <td>${user.gender === true ? "Nam" : user.gender === false ? "Nữ" : "-"}</td>
-      <td>${statusHtml}</td>
-      <td>${roleHtml}</td>
-      <td>${user.fileCount ?? 0}</td>
-      <td>${user.last_sign_in_at ? formatDate(user.last_sign_in_at) : "-"}</td>
-      <td>
-        <div class="actions">
-          ${!user.status && canToggleStatus ? `<button class="action-btn" data-approve-user title="Duyệt">✓</button>` : ""}
-          ${user.status && canToggleStatus ? `<button class="action-btn" data-lock-user title="Khóa">🔒</button>` : ""}
-          ${canManageRole
-      ? `<button class="action-btn" data-toggle-admin title="${user.is_admin ? "Thu quyền Admin" : "Cấp quyền Admin"}">${user.is_admin ? "▾" : "▴"}</button>`
-      : ""}
-          ${canDelete ? `<button class="action-btn delete" data-delete-user title="Xóa">⌫</button>` : ""}
-        </div>
-      </td>
-    </tr>`;
-}
-
-function attachUserRowEvents(container) {
-  container.querySelectorAll("tr[data-user-id]").forEach((row) => {
-    const userId = row.dataset.userId;
-
-    row.querySelector("[data-approve-user]")?.addEventListener("click", () => setUserStatus(userId, true));
-    row.querySelector("[data-lock-user]")?.addEventListener("click", () => setUserStatus(userId, false));
-    row.querySelector("[data-toggle-admin]")?.addEventListener("click", () => toggleAdmin(userId, row));
-    row.querySelector("[data-delete-user]")?.addEventListener("click", () => deleteUser(userId));
-  });
-}
-
-async function setUserStatus(userId, status) {
-  const { error } = await supabaseClient.from("user").update({ status }).eq("id", userId);
-  if (error) return showToast("Không cập nhật được", error.message);
-
-  showToast(status ? "Đã duyệt tài khoản" : "Đã khóa tài khoản", "");
-  await loadUsers();
-}
-
-async function toggleAdmin(userId, row) {
-  const user = allUsers.find((u) => u.id === userId);
-  const { error } = await supabaseClient
-    .from("user")
-    .update({ is_admin: !user.is_admin })
-    .eq("id", userId);
-
-  if (error) return showToast("Không đổi được quyền", error.message);
-
-  showToast(!user.is_admin ? "Đã cấp quyền Admin" : "Đã thu quyền Admin", "");
-  await loadUsers();
-}
-
-async function deleteUser(userId) {
-  if (!confirm("Xóa VĨNH VIỄN tài khoản này?")) return;
-
-  const { data, error } = await supabaseClient.functions.invoke("delete-user", {
-    body: { userId },
-  });
-
-  if (error || data?.error) {
-    return showToast("Không xóa được", data?.error || error.message);
+function renderSelectedTagsBox() {
+  const box = document.getElementById("selectedTagsBox");
+  if (!box) return;
+  if (selectedTagsList.length === 0) {
+    box.innerHTML = '<span style="color:var(--text-faint); font-size:0.8rem;">Chưa chọn hashtag nào</span>';
+    return;
   }
+  box.innerHTML = selectedTagsList.map((tag, idx) => `
+    <span class="tag-chip">#${escapeHTML(tag)} <button type="button" data-remove-tag="${idx}">✕</button></span>
+  `).join('');
 
-  showToast("Đã xóa user", "Tài khoản đã được xóa hoàn toàn khỏi hệ thống.");
-  await loadUsers();
+  box.querySelectorAll("[data-remove-tag]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      selectedTagsList.splice(parseInt(btn.dataset.removeTag), 1);
+      renderSelectedTagsBox();
+      renderAvailableTagsSelect();
+    });
+  });
 }
 
-// ==========================================================================
-// TAB: UPLOAD (DÙNG CHUNG BUCKET DOCUMENTS)
-// ==========================================================================
+document.getElementById("btnAddSelectedTag")?.addEventListener("click", () => {
+  const val = document.getElementById("availableTagsSelect").value;
+  if (val && !selectedTagsList.includes(val)) {
+    selectedTagsList.push(val);
+    renderSelectedTagsBox();
+    renderAvailableTagsSelect();
+  }
+});
 
-document.getElementById("uploadForm").addEventListener("submit", handleUpload);
+document.getElementById("btnAddCustomTag")?.addEventListener("click", () => {
+  const input = document.getElementById("customTagInput");
+  const val = input.value.trim().replace(/^#/, "");
+  if (val && !selectedTagsList.includes(val)) {
+    selectedTagsList.push(val);
+    input.value = "";
+    renderSelectedTagsBox();
+    renderAvailableTagsSelect();
+  }
+});
 
-async function handleUpload(event) {
-  event.preventDefault();
+document.getElementById("uploadForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
   const submitBtn = document.getElementById("uploadSubmitBtn");
   submitBtn.disabled = true;
-  submitBtn.textContent = "Đang tải lên...";
 
   try {
+    const folderId = document.getElementById("uploadFolderSelect").value;
     const rawFile = document.getElementById("uploadFile").files[0];
     const bio = document.getElementById("uploadBio").value.trim();
-    const rawHashtags = document.getElementById("uploadHashtags").value;
     let displayName = document.getElementById("uploadName").value.trim() || rawFile.name;
 
+    if (!folderId) throw new Error("Vui lòng chọn Folder.");
     if (!rawFile) throw new Error("Vui lòng chọn file.");
+    if (selectedTagsList.length === 0) throw new Error("Vui lòng chọn/tạo ít nhất 1 Hashtag.");
 
-    const tagNames = [...new Set(rawHashtags.split(",").map(t => t.trim().replace(/^#/, "")).filter(Boolean))];
-    if (tagNames.length === 0) throw new Error("Vui lòng nhập ít nhất 1 Hashtag (cách nhau bởi dấu phẩy).");
-
+    const folder = allFoldersData.find(f => f.id === folderId);
     const safeExt = rawFile.name.includes(".") ? rawFile.name.split(".").pop() : "";
-    const storageFileName = `${crypto.randomUUID()}${safeExt ? "." + safeExt : ""}`;
-    const storagePath = `${BUCKET_NAME}/${currentUser.id}/${storageFileName}`;
-    const pathInsideBucket = `${currentUser.id}/${storageFileName}`;
+    const storageFileName = `${crypto.randomUUID()}.${safeExt}`;
+    const storagePath = `${folder.bucket_name}/${currentUser.id}/${storageFileName}`;
 
-    const { error: uploadError } = await supabaseClient.storage
-      .from(BUCKET_NAME)
-      .upload(pathInsideBucket, rawFile);
+    const { error: uploadError } = await supabaseClient.storage.from(folder.bucket_name).upload(`${currentUser.id}/${storageFileName}`, rawFile);
     if (uploadError) throw uploadError;
 
     const { data: newFile, error: insertError } = await supabaseClient
       .from("file")
-      .insert({ file_name: displayName, storage_path: storagePath, id_user: currentUser.id, bio })
-      .select()
-      .single();
+      .insert({ file_name: displayName, storage_path: storagePath, id_folder: folderId, id_user: currentUser.id, bio })
+      .select().single();
     if (insertError) throw insertError;
 
-    for (const tagName of tagNames) {
+    for (const tagName of selectedTagsList) {
       let { data: tag } = await supabaseClient.from("hashtag").select("id").eq("name", tagName).single();
       if (!tag) {
-        const { data: createdTag } = await supabaseClient
-          .from("hashtag")
-          .insert({ name: tagName, created_by: currentUser.id })
-          .select()
-          .single();
-        tag = createdTag;
+        const { data: cTag } = await supabaseClient.from("hashtag").insert({ name: tagName, created_by: currentUser.id }).select().single();
+        tag = cTag;
       }
       if (tag) {
         await supabaseClient.from("file_hashtag").insert({ id_file: newFile.id, id_hashtag: tag.id });
       }
     }
 
-    await logHistory(newFile.id, "Đã thêm");
-
-    showToast("Tải lên thành công", `File "${displayName}" đã được gắn thẻ: #${tagNames.join(", #")}`);
+    showToast("Tải lên thành công!", "");
     document.getElementById("uploadForm").reset();
-    await loadFiles();
-    await loadHashtagsAdmin();
-    await loadLeaderboard();
-  } catch (error) {
-    showToast("Tải lên thất bại", error.message || "Vui lòng thử lại.");
+    selectedTagsList = [];
+    renderSelectedTagsBox();
+    await loadInitData();
+    switchPage("files");
+  } catch (err) {
+    showToast("Thất bại", err.message);
   } finally {
     submitBtn.disabled = false;
-    submitBtn.textContent = "⬆ Tải lên";
   }
+});
+
+// 6. QUẢN LÝ USER ADMIN
+function renderUserTable() {
+  const kw = document.getElementById("userSearchInput").value.trim().toLowerCase();
+  const list = allUsersData.filter(u => (u.user_name || "").toLowerCase().includes(kw));
+
+  document.getElementById("userResultCount").textContent = list.length;
+  document.getElementById("userEmptyState").hidden = list.length > 0;
+  document.querySelector("#usersPage .table-scroll").hidden = list.length === 0;
+
+  const body = document.getElementById("userTableBody");
+  body.innerHTML = list.map(user => {
+    const isSelf = user.id === currentUser.id;
+    const canManageRole = currentUser.isSuperAdmin && !isSelf && !user.is_super_admin;
+    const canDelete = !isSelf && !user.is_super_admin && (currentUser.isSuperAdmin || !user.is_admin);
+    const canToggleStatus = !isSelf && (currentUser.isSuperAdmin || !user.is_admin);
+
+    let roleHtml = `<span class="badge">User</span>`;
+    if (user.is_super_admin) roleHtml = `<span class="badge">Super Admin</span>`;
+    else if (user.is_admin) roleHtml = `<span class="badge">Admin</span>`;
+
+    return /* html */ `
+      <tr>
+        <td><strong>${escapeHTML(user.user_name || "-")}</strong></td>
+        <td>${user.status ? '<span class="status active">Đã duyệt</span>' : '<span class="status inactive">Chờ duyệt</span>'}</td>
+        <td>${roleHtml}</td>
+        <td>${allFilesData.filter(f => f.id_user === user.id).length}</td>
+        <td>${user.last_sign_in_at ? formatDate(user.last_sign_in_at) : "-"}</td>
+        <td>
+          <div class="actions">
+            ${!user.status && canToggleStatus ? `<button class="action-btn" data-approve-user="${user.id}">✓</button>` : ""}
+            ${user.status && canToggleStatus ? `<button class="action-btn" data-lock-user="${user.id}">🔒</button>` : ""}
+            ${canManageRole ? `<button class="action-btn" data-toggle-admin="${user.id}">${user.is_admin ? "▾" : "▴"}</button>` : ""}
+            ${canDelete ? `<button class="action-btn delete" data-delete-user="${user.id}">⌫</button>` : ""}
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  body.querySelectorAll("[data-approve-user]").forEach(b => b.addEventListener("click", () => setUserStatus(b.dataset.approveUser, true)));
+  body.querySelectorAll("[data-lock-user]").forEach(b => b.addEventListener("click", () => setUserStatus(b.dataset.lockUser, false)));
+  body.querySelectorAll("[data-toggle-admin]").forEach(b => b.addEventListener("click", () => toggleAdmin(b.dataset.toggleAdmin)));
+  body.querySelectorAll("[data-delete-user]").forEach(b => b.addEventListener("click", () => deleteUser(b.dataset.deleteUser)));
 }
 
-// ==========================================================================
-// TAB: LỊCH SỬ
-// ==========================================================================
+async function setUserStatus(id, status) {
+  await supabaseClient.from("user").update({ status }).eq("id", id);
+  showToast("Đã cập nhật trạng thái", "");
+  await loadInitData();
+}
 
+async function toggleAdmin(id) {
+  const user = allUsersData.find(u => u.id === id);
+  await supabaseClient.from("user").update({ is_admin: !user.is_admin }).eq("id", id);
+  showToast("Đã đổi quyền Admin", "");
+  await loadInitData();
+}
+
+async function deleteUser(id) {
+  if (!confirm("Xóa tài khoản này?")) return;
+  await supabaseClient.functions.invoke("delete-user", { body: { userId: id } });
+  showToast("Đã xóa user", "");
+  await loadInitData();
+}
+
+// 7. BẢNG XẾP HẠNG PODIUM TOP 3 ADMIN
+async function loadLeaderboard() {
+  const { data } = await supabaseClient.from("user").select("user_name, score").order("score", { ascending: false }).limit(20);
+  const users = data || [];
+
+  const podiumBox = document.getElementById("podiumTop3");
+  const restBody = document.getElementById("leaderboardRestBody");
+
+  if (!podiumBox) return;
+  if (users.length === 0) { podiumBox.innerHTML = '<p>Chưa có dữ liệu</p>'; return; }
+
+  const top1 = users[0], top2 = users[1], top3 = users[2];
+  let podiumHtml = '';
+  if (top2) podiumHtml += `<div class="podium-card rank-2"><div class="podium-badge">2</div><div class="podium-avatar">${escapeHTML(top2.user_name.slice(0, 2).toUpperCase())}</div><strong>${escapeHTML(top2.user_name)}</strong><p style="color:var(--text-sub); font-size:0.85rem; margin-top:0.3rem;">${top2.score || 0} tài liệu</p></div>`;
+  if (top1) podiumHtml += `<div class="podium-card rank-1"><div class="podium-badge">1</div><div class="podium-avatar">${escapeHTML(top1.user_name.slice(0, 2).toUpperCase())}</div><strong style="font-size:1.05rem;">${escapeHTML(top1.user_name)}</strong><p style="color:#f59e0b; font-weight:700; margin-top:0.3rem;">${top1.score || 0} tài liệu</p></div>`;
+  if (top3) podiumHtml += `<div class="podium-card rank-3"><div class="podium-badge">3</div><div class="podium-avatar">${escapeHTML(top3.user_name.slice(0, 2).toUpperCase())}</div><strong>${escapeHTML(top3.user_name)}</strong><p style="color:var(--text-sub); font-size:0.85rem; margin-top:0.3rem;">${top3.score || 0} tài liệu</p></div>`;
+
+  podiumBox.innerHTML = podiumHtml;
+
+  const restUsers = users.slice(3);
+  restBody.innerHTML = restUsers.map((u, i) => `
+    <tr>
+      <td><strong>#${i + 4}</strong></td>
+      <td>${escapeHTML(u.user_name)}</td>
+      <td><strong>${u.score || 0}</strong> tài liệu</td>
+    </tr>
+  `).join('');
+}
+
+// 8. CÁC HÀM TIỆN ÍCH DÙNG CHUNG
 async function loadHistory() {
-  const [fileHistoryResult, adminHistoryResult] = await Promise.all([
-    supabaseClient
-      .from("history_file")
-      .select("id, created_at, change, file:id_file(file_name), user:id_user(user_name)")
-      .order("created_at", { ascending: false })
-      .limit(200),
-    supabaseClient
-      .from("history_admin")
-      .select("id, created_at, action, actor:actor_id(user_name), target:target_id(user_name)")
-      .order("created_at", { ascending: false })
-      .limit(200),
+  const [fHist, aHist] = await Promise.all([
+    supabaseClient.from("history_file").select("id, created_at, change, file:id_file(file_name), user:id_user(user_name)").order("created_at", { ascending: false }).limit(100),
+    supabaseClient.from("history_admin").select("id, created_at, action, actor:actor_id(user_name), target:target_id(user_name)").order("created_at", { ascending: false }).limit(100)
   ]);
 
-  if (fileHistoryResult.error) return showToast("Không tải được lịch sử file", fileHistoryResult.error.message);
-  if (adminHistoryResult.error) return showToast("Không tải được lịch sử phân quyền", adminHistoryResult.error.message);
-
-  const fileEntries = (fileHistoryResult.data || []).map((h) => ({
-    time: h.created_at,
-    target: h.file?.file_name || "(file đã bị xóa vĩnh viễn)",
-    actor: h.user?.user_name || "-",
-    action: h.change,
-  }));
-
-  const adminEntries = (adminHistoryResult.data || []).map((h) => ({
-    time: h.created_at,
-    target: h.target?.user_name || "-",
-    actor: h.actor?.user_name || "-",
-    action: h.action,
-  }));
-
-  const merged = [...fileEntries, ...adminEntries].sort((a, b) => new Date(b.time) - new Date(a.time));
+  const fEntries = (fHist.data || []).map(h => ({ time: h.created_at, target: h.file?.file_name || "(file đã bị xóa)", actor: h.user?.user_name || "-", action: h.change }));
+  const aEntries = (aHist.data || []).map(h => ({ time: h.created_at, target: h.target?.user_name || "-", actor: h.actor?.user_name || "-", action: h.action }));
+  const merged = [...fEntries, ...aEntries].sort((a, b) => new Date(b.time) - new Date(a.time));
 
   document.getElementById("historyEmptyState").hidden = merged.length > 0;
   document.querySelector("#historyPage .table-scroll").hidden = merged.length === 0;
-
-  document.getElementById("historyTableBody").innerHTML = merged
-    .map(
-      (h) => /* html */ `
-      <tr>
-        <td>${formatDateTime(h.time)}</td>
-        <td>${escapeHTML(h.target)}</td>
-        <td>${escapeHTML(h.actor)}</td>
-        <td>${escapeHTML(h.action)}</td>
-      </tr>`
-    )
-    .join("");
+  document.getElementById("historyTableBody").innerHTML = merged.map(h => `
+    <tr>
+      <td>${formatDateTime(h.time)}</td>
+      <td>${escapeHTML(h.target)}</td>
+      <td>${escapeHTML(h.actor)}</td>
+      <td>${escapeHTML(h.action)}</td>
+    </tr>
+  `).join('');
 }
 
-// ==========================================================================
-// TAB: CÀI ĐẶT
-// ==========================================================================
-
-document.getElementById("settingsForm").addEventListener("submit", handleSaveSettings);
-
 async function loadSettings() {
-  const { data, error } = await supabaseClient
-    .from("site_setting")
-    .select("phone, email, facebook")
-    .eq("id", 1)
-    .single();
-
-  if (error || !data) return;
-
+  const { data } = await supabaseClient.from("site_setting").select("phone, email, facebook").eq("id", 1).single();
+  if (!data) return;
   document.getElementById("settingPhone").value = data.phone || "";
   document.getElementById("settingEmail").value = data.email || "";
   document.getElementById("settingFacebook").value = data.facebook || "";
 }
 
-async function handleSaveSettings(event) {
-  event.preventDefault();
-  const submitBtn = document.getElementById("settingsSubmitBtn");
-  submitBtn.disabled = true;
-
-  const payload = {
+document.getElementById("settingsForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await supabaseClient.from("site_setting").upsert({
     id: 1,
     phone: document.getElementById("settingPhone").value.trim(),
     email: document.getElementById("settingEmail").value.trim(),
     facebook: document.getElementById("settingFacebook").value.trim(),
-    updated_at: new Date().toISOString(),
-  };
-
-  const { error } = await supabaseClient.from("site_setting").upsert(payload);
-
-  submitBtn.disabled = false;
-  if (error) return showToast("Không lưu được", error.message);
-
-  showToast("Đã lưu cài đặt", "Thông tin liên hệ đã được cập nhật.");
-}
-
-// ==========================================================================
-// TAB: TÀI KHOẢN
-// ==========================================================================
-
-document.getElementById("accountForm").addEventListener("submit", handleUpdateAccount);
-
-async function handleUpdateAccount(event) {
-  event.preventDefault();
-  const submitBtn = document.getElementById("accountSubmitBtn");
-  submitBtn.disabled = true;
-
-  try {
-    const newName = document.getElementById("accountNewName").value.trim();
-    const newPassword = document.getElementById("accountNewPassword").value;
-    const confirmPassword = document.getElementById("accountConfirmPassword").value;
-    const currentPassword = document.getElementById("accountCurrentPassword").value;
-
-    if (!newName && !newPassword) throw new Error("Bạn chưa nhập gì để cập nhật.");
-    if (newPassword && newPassword !== confirmPassword) throw new Error("Mật khẩu mới nhập lại không khớp.");
-    if (newPassword && newPassword.length < 6) throw new Error("Mật khẩu mới cần tối thiểu 6 ký tự.");
-
-    const { error: reauthError } = await supabaseClient.auth.signInWithPassword({
-      email: currentUser.email,
-      password: currentPassword,
-    });
-    if (reauthError) throw new Error("Mật khẩu hiện tại không đúng.");
-
-    if (newName) {
-      const { error } = await supabaseClient.from("user").update({ user_name: newName }).eq("id", currentUser.id);
-      if (error) throw error;
-      currentUser.name = newName;
-      elUserNameLabel.textContent = currentUser.name + (currentUser.isSuperAdmin ? " (Super Admin)" : "");
-      elUserAvatar.textContent = currentUser.name.slice(0, 2).toUpperCase();
-    }
-
-    if (newPassword) {
-      const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
-      if (error) throw error;
-    }
-
-    showToast("Đã cập nhật tài khoản", "");
-    document.getElementById("accountForm").reset();
-  } catch (error) {
-    showToast("Không cập nhật được", error.message || "Vui lòng thử lại.");
-  } finally {
-    submitBtn.disabled = false;
-  }
-}
-
-// ==========================================================================
-// HÀM TIỆN ÍCH
-// ==========================================================================
-
-function showToast(title, message) {
-  clearTimeout(toastTimer);
-  document.getElementById("toastTitle").textContent = title;
-  document.getElementById("toastMessage").textContent = message;
-  document.getElementById("toast").classList.add("show");
-  toastTimer = setTimeout(() => document.getElementById("toast").classList.remove("show"), 2800);
-}
-
-function formatDate(isoString) {
-  return new Date(isoString).toLocaleDateString("vi-VN");
-}
-
-function formatDateTime(isoString) {
-  return new Date(isoString).toLocaleString("vi-VN");
-}
-
-function escapeHTML(value = "") {
-  return String(value).replace(/[&<>'"]/g, (char) => {
-    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char];
+    updated_at: new Date().toISOString()
   });
+  showToast("Đã lưu cài đặt", "");
+});
+
+document.getElementById("accountForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = document.getElementById("accountNewName").value.trim();
+  const pass = document.getElementById("accountNewPassword").value;
+  const currPass = document.getElementById("accountCurrentPassword").value;
+
+  const { error } = await supabaseClient.auth.signInWithPassword({ email: currentUser.email, password: currPass });
+  if (error) return showToast("Thất bại", "Mật khẩu hiện tại không đúng.");
+
+  if (name) await supabaseClient.from("user").update({ user_name: name }).eq("id", currentUser.id);
+  if (pass) await supabaseClient.auth.updateUser({ password: pass });
+
+  showToast("Cập nhật thành công!", "");
+  document.getElementById("accountForm").reset();
+});
+
+async function toggleFileStatus(id) {
+  const file = allFilesData.find(f => f.id === id);
+  await supabaseClient.from("file").update({ status: !file.status }).eq("id", id);
+  showToast("Đã cập nhật trạng thái", "");
+  await loadInitData();
 }
 
-function escapeAttr(value = "") {
-  return escapeHTML(value);
+async function purgeFile(id) {
+  if (!confirm("Xóa vĩnh viễn file này?")) return;
+  const file = allFilesData.find(f => f.id === id);
+  const bucket = file.folder?.bucket_name || "documents";
+  await supabaseClient.storage.from(bucket).remove([file.storage_path.replace(`${bucket}/`, "")]);
+  await supabaseClient.from("file").delete().eq("id", id);
+  showToast("Đã xóa vĩnh viễn", "");
+  await loadInitData();
 }
 
-function enablePasswordToggles() {
-  document.querySelectorAll('input[type="password"]').forEach((input) => {
-    if (input.dataset.toggleAttached) return;
-    input.dataset.toggleAttached = "true";
+function slugify(t) { return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""); }
+document.getElementById("btnGoToUpload")?.addEventListener("click", () => switchPage("upload"));
+document.addEventListener("click", (e) => { const nav = e.target.closest("[data-page]"); if (nav) switchPage(nav.dataset.page); });
+document.getElementById("menuToggle")?.addEventListener("click", () => elSidebar.classList.toggle("open"));
+document.getElementById("logoutBtn")?.addEventListener("click", async () => { await supabaseClient.auth.signOut(); window.location.href = "login.html"; });
 
-    const wrapper = document.createElement("div");
-    wrapper.className = "password-field-wrap";
-    input.parentNode.insertBefore(wrapper, input);
-    wrapper.appendChild(input);
-
-    const toggleBtn = document.createElement("button");
-    toggleBtn.type = "button";
-    toggleBtn.className = "password-toggle-btn";
-    toggleBtn.textContent = "👁";
-    wrapper.appendChild(toggleBtn);
-
-    toggleBtn.addEventListener("click", () => {
-      const showing = input.type === "text";
-      input.type = showing ? "password" : "text";
-      toggleBtn.textContent = showing ? "👁" : "🙈";
-    });
-  });
+const pageTitles = { files: "Quản lý tài liệu", folders: "Quản lý Folder", hashtags: "Quản lý Hashtag", users: "Quản lý user", leaderboard: "Bảng xếp hạng", upload: "Upload", history: "Lịch sử", discussion: "Thảo luận", settings: "Cài đặt", account: "Tài khoản" };
+function switchPage(p) {
+  document.querySelectorAll(".nav-item").forEach(i => i.classList.toggle("active", i.dataset.page === p));
+  document.querySelectorAll(".page").forEach(s => s.classList.remove("active"));
+  document.getElementById(`${p}Page`)?.classList.add("active");
+  elBreadcrumbCurrent.textContent = pageTitles[p] || "Quản lý tài liệu";
+  elSidebar.classList.remove("open");
+  if (window.location.hash !== `#${p}`) history.replaceState(null, "", `#${p}`);
 }
-enablePasswordToggles();
-
-function applyTheme(isDark) {
-  document.documentElement.dataset.theme = isDark ? "dark" : "light";
-}
-
+function restorePageFromHash() { const s = window.location.hash.replace("#", ""); if (s && pageTitles[s]) switchPage(s); }
+function showToast(t, m) { clearTimeout(toastTimer); document.getElementById("toastTitle").textContent = t; document.getElementById("toastMessage").textContent = m; document.getElementById("toast").classList.add("show"); toastTimer = setTimeout(() => document.getElementById("toast").classList.remove("show"), 2800); }
+function formatDate(iso) { return new Date(iso).toLocaleDateString("vi-VN"); }
+function formatDateTime(iso) { return new Date(iso).toLocaleString("vi-VN"); }
+function escapeHTML(v = "") { return String(v).replace(/[&<>'"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c])); }
 function initThemeToggle(isDark) {
-  applyTheme(isDark);
+  document.documentElement.dataset.theme = isDark ? "dark" : "light";
   const toggle = document.getElementById("darkModeToggle");
   if (!toggle) return;
   toggle.checked = !!isDark;
-
   toggle.addEventListener("change", async () => {
-    const newValue = toggle.checked;
-    applyTheme(newValue);
-    await supabaseClient.from("user").update({ color: newValue }).eq("id", currentUser.id);
+    document.documentElement.dataset.theme = toggle.checked ? "dark" : "light";
+    await supabaseClient.from("user").update({ color: toggle.checked }).eq("id", currentUser.id);
   });
-}
-
-async function loadLeaderboard() {
-  const { data, error } = await supabaseClient
-    .from("user")
-    .select("user_name, score")
-    .order("score", { ascending: false })
-    .limit(10);
-
-  const list = document.getElementById("leaderboardList");
-  if (!list) return;
-
-  if (error || !data || data.length === 0) {
-    list.innerHTML = `<p style="color:var(--text-sub);font-size:0.85rem;">Chưa có dữ liệu.</p>`;
-    return;
-  }
-
-  const medals = ["🥇", "🥈", "🥉"];
-  list.innerHTML = data
-    .map((u, i) => /* html */ `
-      <div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 0;border-bottom:1px solid var(--border-color);">
-        <span style="width:1.5rem;text-align:center;font-weight:bold;">${medals[i] || i + 1}</span>
-        <span style="flex:1;">${escapeHTML(u.user_name || "Ẩn danh")}</span>
-        <strong>${u.score ?? 0} file</strong>
-      </div>`)
-    .join("");
 }
