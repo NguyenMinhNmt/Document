@@ -66,7 +66,6 @@ async function loadInitData() {
   renderHashtagManageList();
 }
 
-// 1. TẢI DỮ LIỆU CƠ BẢN
 async function loadFolders() {
   const { data } = await supabaseClient.from("folder").select("id, display_name, bucket_name").order("display_name");
   allFoldersData = data || [];
@@ -98,7 +97,6 @@ async function loadAllFiles() {
   allFilesData = data || [];
 }
 
-// 2. BỘ LỌC TÌM KIẾM TỔNG HỢP (TAB TÀI LIỆU)
 function populateFilterDropdowns() {
   const fFolder = document.getElementById("filterFolder");
   const fUploader = document.getElementById("filterUploader");
@@ -142,7 +140,7 @@ function renderFileTable() {
       .join(' ') || '-';
 
     return /* html */ `
-      <tr data-file-id="${file.id}">
+      <tr data-file-id="${file.id}" style="cursor:pointer;">
         <td>${idx + 1}</td>
         <td><strong>${escapeHTML(file.file_name)}</strong></td>
         <td>${escapeHTML(file.folder?.display_name || "-")}</td>
@@ -150,9 +148,9 @@ function renderFileTable() {
         <td>${escapeHTML(file.user?.user_name || "-")}</td>
         <td>${statusBadge}</td>
         <td>${formatDate(file.created_at)}</td>
-        <td>
+        <td onclick="event.stopPropagation();">
           <div class="actions">
-            <button class="action-btn" data-preview-btn="${file.id}" title="Xem chi tiết">👁</button>
+            <button class="action-btn" data-download-btn="${file.id}" title="Tải về trực tiếp">⬇</button>
             <button class="action-btn" data-toggle-status="${file.id}" title="${file.status ? 'Ẩn' : 'Hiện'}">${file.status ? '🚫' : '↺'}</button>
             <button class="action-btn delete" data-delete-btn="${file.id}" title="Xóa vĩnh viễn">⌫</button>
           </div>
@@ -160,12 +158,53 @@ function renderFileTable() {
       </tr>`;
   }).join('');
 
-  body.querySelectorAll("[data-preview-btn]").forEach(btn => btn.addEventListener("click", () => openPreviewModal(btn.dataset.previewBtn)));
-  body.querySelectorAll("[data-toggle-status]").forEach(btn => btn.addEventListener("click", () => toggleFileStatus(btn.dataset.toggleStatus)));
-  body.querySelectorAll("[data-delete-btn]").forEach(btn => btn.addEventListener("click", () => purgeFile(btn.dataset.deleteBtn)));
+  // Click hàng bất kỳ để xem
+  body.querySelectorAll("tr[data-file-id]").forEach(row => {
+    row.addEventListener("click", () => openPreviewModal(row.dataset.fileId));
+  });
+
+  // Tải trực tiếp
+  body.querySelectorAll("[data-download-btn]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      downloadFileDirectly(btn.dataset.downloadBtn);
+    });
+  });
+
+  body.querySelectorAll("[data-toggle-status]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleFileStatus(btn.dataset.toggleStatus);
+    });
+  });
+
+  body.querySelectorAll("[data-delete-btn]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      purgeFile(btn.dataset.deleteBtn);
+    });
+  });
 }
 
-// 3. MODAL XEM TRƯỚC FILE SPLIT VIEW
+async function downloadFileDirectly(fileId) {
+  const file = allFilesData.find(f => f.id === fileId);
+  if (!file) return;
+
+  let bucket = "documents";
+  let pathInsideBucket = file.storage_path;
+
+  if (file.storage_path.includes("/")) {
+    const parts = file.storage_path.split("/");
+    bucket = parts[0];
+    pathInsideBucket = parts.slice(1).join("/");
+  }
+
+  const { data, error } = await supabaseClient.storage.from(bucket).createSignedUrl(pathInsideBucket, 300, { download: true });
+  if (error || !data?.signedUrl) return showToast("Lỗi tải về", "Không thể lấy đường dẫn tải file.");
+
+  window.open(data.signedUrl, "_blank");
+}
+
 async function openPreviewModal(fileId) {
   const file = allFilesData.find(f => f.id === fileId);
   if (!file) return;
@@ -191,7 +230,6 @@ async function openPreviewModal(fileId) {
   }
 
   const ext = file.file_name.split('.').pop().toLowerCase();
-
   const { data, error } = await supabaseClient.storage.from(bucket).createSignedUrl(pathInsideBucket, 300);
   const signedUrl = data?.signedUrl || "#";
 
@@ -204,7 +242,6 @@ async function openPreviewModal(fileId) {
       <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:#fff; text-align:center; padding:1.5rem;">
         <span style="font-size:3rem; margin-bottom:1rem;">⚠️</span>
         <p style="font-size:1rem; font-weight:600;">Không thể tải bản xem trước của file này</p>
-        <p style="font-size:0.8rem; color:#aaa; margin-top:0.5rem;">File có thể đã bị xóa hoặc lưu ở đường dẫn cũ.</p>
       </div>`;
     document.getElementById("previewFileModal").classList.add("open");
     return;
@@ -220,7 +257,7 @@ async function openPreviewModal(fileId) {
       <div style="display:flex; flex-direction:column; height:100%;">
         <iframe src="${docViewerUrl}" style="flex:1; width:100%; border:none;"></iframe>
         <div style="padding:0.6rem; background:#2a2a2a; color:#fff; text-align:center; font-size:0.8rem;">
-          Đang xem file <strong>.${ext.toUpperCase()}</strong>. Nếu không hiển thị, bấm nút <a href="${signedUrl}" target="_blank" style="color:var(--accent-1); text-decoration:underline;">Tải tài liệu về</a> ở bên phải.
+          Đang xem file <strong>.${ext.toUpperCase()}</strong>. Nếu không hiển thị, bấm <a href="${signedUrl}" target="_blank" style="color:var(--accent-1); text-decoration:underline;">Tải về</a> ở bên phải.
         </div>
       </div>`;
   }
@@ -230,7 +267,6 @@ async function openPreviewModal(fileId) {
 
 document.querySelectorAll("[data-close-preview]").forEach(el => el.addEventListener("click", () => document.getElementById("previewFileModal").classList.remove("open")));
 
-// 4. QUẢN LÝ FOLDER & HASHTAG ADMIN
 function renderFolderManageList() {
   const body = document.getElementById("folderManageBody");
   if (!body) return;
@@ -298,7 +334,6 @@ async function deleteHashtag(id) {
   await loadInitData();
 }
 
-// 5. INTERACTIVE TAG PICKER & UPLOAD ADMIN
 function renderAvailableTagsSelect() {
   const select = document.getElementById("availableTagsSelect");
   if (!select) return;
@@ -400,7 +435,6 @@ document.getElementById("uploadForm")?.addEventListener("submit", async (e) => {
   }
 });
 
-// 6. QUẢN LÝ USER ADMIN
 function renderUserTable() {
   const kw = document.getElementById("userSearchInput").value.trim().toLowerCase();
   const list = allUsersData.filter(u => (u.user_name || "").toLowerCase().includes(kw));
@@ -464,7 +498,6 @@ async function deleteUser(id) {
   await loadInitData();
 }
 
-// 7. BẢNG XẾP HẠNG PODIUM TOP 3 ADMIN
 async function loadLeaderboard() {
   const { data } = await supabaseClient.from("user").select("user_name, score").order("score", { ascending: false }).limit(20);
   const users = data || [];
@@ -493,7 +526,6 @@ async function loadLeaderboard() {
   `).join('');
 }
 
-// 8. CÁC HÀM TIỆN ÍCH DÙNG CHUNG
 async function loadHistory() {
   const [fHist, aHist] = await Promise.all([
     supabaseClient.from("history_file").select("id, created_at, change, file:id_file(file_name), user:id_user(user_name)").order("created_at", { ascending: false }).limit(100),

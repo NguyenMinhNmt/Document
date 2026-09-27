@@ -7,7 +7,7 @@ let allFilesData = [];
 let allFoldersData = [];
 let allUsersData = [];
 let allHashtagsData = [];
-let selectedTagsList = []; // Mảng chứa các hashtag đã chọn khi upload
+let selectedTagsList = [];
 let toastTimer;
 
 const elSidebar = document.getElementById("sidebar");
@@ -56,7 +56,6 @@ async function loadInitData() {
   renderDocTable();
 }
 
-// 1. TẢI DỮ LIỆU
 async function loadFolders() {
   const { data } = await supabaseClient.from("folder").select("id, display_name, bucket_name").order("display_name");
   allFoldersData = data || [];
@@ -88,7 +87,6 @@ async function loadAllFiles() {
   document.getElementById("userFileCountLabel").textContent = `${allFilesData.filter(f => f.id_user === currentUser.id).length} file đã upload`;
 }
 
-// 2. BỘ LỌC TÌM KIẾM TỔNG HỢP (TAB TÀI LIỆU)
 function populateFilterDropdowns() {
   const fFolder = document.getElementById("filterFolder");
   const fUploader = document.getElementById("filterUploader");
@@ -99,7 +97,7 @@ function populateFilterDropdowns() {
   fTag.innerHTML = '<option value="">Tất cả Hashtag</option>' + allHashtagsData.map(t => `<option value="${t.id}">#${escapeHTML(t.name)}</option>`).join('');
 
   [document.getElementById("filterKeyword"), fFolder, fUploader, fTag].forEach(el => {
-    el.addEventListener("input", renderDocTable);
+    el?.addEventListener("input", renderDocTable);
   });
 }
 
@@ -129,31 +127,62 @@ function renderDocTable() {
       .join(' ') || '-';
 
     return /* html */ `
-      <tr data-file-id="${file.id}">
+      <tr data-file-id="${file.id}" style="cursor:pointer;">
         <td>${idx + 1}</td>
         <td><strong>${escapeHTML(file.file_name)}</strong></td>
         <td>${escapeHTML(file.folder?.display_name || "-")}</td>
         <td>${tagsHtml}</td>
         <td>${escapeHTML(file.user?.user_name || "-")}</td>
         <td>${formatDate(file.created_at)}</td>
-        <td>
+        <td onclick="event.stopPropagation();">
           <div class="actions">
-            <button class="action-btn" data-preview-btn="${file.id}" title="Xem chi tiết">👁</button>
+            <button class="action-btn" data-download-btn="${file.id}" title="Tải về trực tiếp">⬇</button>
             ${isOwner ? `<button class="action-btn delete" data-delete-btn="${file.id}" title="Xóa">⌫</button>` : ''}
           </div>
         </td>
       </tr>`;
   }).join('');
 
-  body.querySelectorAll("[data-preview-btn]").forEach(btn => {
-    btn.addEventListener("click", () => openPreviewModal(btn.dataset.previewBtn));
+  // Click hàng bất kỳ để mở preview
+  body.querySelectorAll("tr[data-file-id]").forEach(row => {
+    row.addEventListener("click", () => openPreviewModal(row.dataset.fileId));
   });
+
+  // Tải trực tiếp
+  body.querySelectorAll("[data-download-btn]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      downloadFileDirectly(btn.dataset.downloadBtn);
+    });
+  });
+
   body.querySelectorAll("[data-delete-btn]").forEach(btn => {
-    btn.addEventListener("click", () => deleteFile(btn.dataset.deleteBtn));
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteFile(btn.dataset.deleteBtn);
+    });
   });
 }
 
-// 3. MODAL XEM TRƯỚC FILE (SPLIT VIEW)
+async function downloadFileDirectly(fileId) {
+  const file = allFilesData.find(f => f.id === fileId);
+  if (!file) return;
+
+  let bucket = "documents";
+  let pathInsideBucket = file.storage_path;
+
+  if (file.storage_path.includes("/")) {
+    const parts = file.storage_path.split("/");
+    bucket = parts[0];
+    pathInsideBucket = parts.slice(1).join("/");
+  }
+
+  const { data, error } = await supabaseClient.storage.from(bucket).createSignedUrl(pathInsideBucket, 300, { download: true });
+  if (error || !data?.signedUrl) return showToast("Lỗi tải về", "Không thể lấy đường dẫn tải file.");
+
+  window.open(data.signedUrl, "_blank");
+}
+
 async function openPreviewModal(fileId) {
   const file = allFilesData.find(f => f.id === fileId);
   if (!file) return;
@@ -169,7 +198,6 @@ async function openPreviewModal(fileId) {
     .join(' ');
   document.getElementById("prevFileTags").innerHTML = tagsHtml || '-';
 
-  // Xử lý tách Bucket & Path an toàn cho cả file cũ lẫn file mới
   let bucket = "documents";
   let pathInsideBucket = file.storage_path;
 
@@ -180,8 +208,6 @@ async function openPreviewModal(fileId) {
   }
 
   const ext = file.file_name.split('.').pop().toLowerCase();
-
-  // Tạo URL tải về từ Supabase Storage
   const { data, error } = await supabaseClient.storage.from(bucket).createSignedUrl(pathInsideBucket, 300);
   const signedUrl = data?.signedUrl || "#";
 
@@ -194,38 +220,36 @@ async function openPreviewModal(fileId) {
       <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:#fff; text-align:center; padding:1.5rem;">
         <span style="font-size:3rem; margin-bottom:1rem;">⚠️</span>
         <p style="font-size:1rem; font-weight:600;">Không thể tải bản xem trước của file này</p>
-        <p style="font-size:0.8rem; color:#aaa; margin-top:0.5rem;">File có thể đã bị xóa hoặc đường dẫn lưu trữ cũ không khả dụng.</p>
       </div>`;
     document.getElementById("previewFileModal").classList.add("open");
     return;
   }
 
-  // Phân loại hiển thị theo định dạng file
   if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) {
     viewerBox.innerHTML = `<img src="${signedUrl}" alt="Preview" style="max-width:100%; max-height:100%; object-fit:contain; margin:auto; display:block;">`;
   } else if (ext === "pdf") {
     viewerBox.innerHTML = `<iframe src="${signedUrl}" style="width:100%; height:100%; border:none;"></iframe>`;
   } else {
-    // Với file Word, Excel, PowerPoint (.docx, .xlsx, .pptx)
     const docViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(signedUrl)}&embedded=true`;
     viewerBox.innerHTML = `
       <div style="display:flex; flex-direction:column; height:100%;">
         <iframe src="${docViewerUrl}" style="flex:1; width:100%; border:none;"></iframe>
         <div style="padding:0.6rem; background:#2a2a2a; color:#fff; text-align:center; font-size:0.8rem;">
-          Đang xem file <strong>.${ext.toUpperCase()}</strong>. Nếu không hiển thị, vui lòng bấm nút <a href="${signedUrl}" target="_blank" style="color:var(--accent-1); text-decoration:underline;">Tải tài liệu về</a> ở bên phải.
+          Đang xem file <strong>.${ext.toUpperCase()}</strong>. Nếu không hiển thị, bấm <a href="${signedUrl}" target="_blank" style="color:var(--accent-1); text-decoration:underline;">Tải về</a> ở bên phải.
         </div>
       </div>`;
   }
 
   document.getElementById("previewFileModal").classList.add("open");
 }
+
 document.querySelectorAll("[data-close-preview]").forEach(el => {
   el.addEventListener("click", () => document.getElementById("previewFileModal").classList.remove("open"));
 });
 
-// 4. INTERACTIVE TAG PICKER (UPLOAD)
 function renderAvailableTagsSelect() {
   const select = document.getElementById("availableTagsSelect");
+  if (!select) return;
   const available = allHashtagsData.filter(t => !selectedTagsList.includes(t.name));
   select.innerHTML = '<option value="">-- Chọn hashtag có sẵn --</option>' +
     available.map(t => `<option value="${escapeHTML(t.name)}">#${escapeHTML(t.name)}</option>`).join('');
@@ -233,6 +257,7 @@ function renderAvailableTagsSelect() {
 
 function renderSelectedTagsBox() {
   const box = document.getElementById("selectedTagsBox");
+  if (!box) return;
   if (selectedTagsList.length === 0) {
     box.innerHTML = '<span style="color:var(--text-faint); font-size:0.8rem;">Chưa chọn hashtag nào</span>';
     return;
@@ -323,7 +348,6 @@ document.getElementById("uploadForm")?.addEventListener("submit", async (e) => {
   }
 });
 
-// 5. BẢNG XẾP HẠNG (PODIUM TOP 3)
 async function loadLeaderboard() {
   const { data } = await supabaseClient.from("user").select("user_name, score").order("score", { ascending: false }).limit(20);
   const users = data || [];
@@ -331,43 +355,15 @@ async function loadLeaderboard() {
   const podiumBox = document.getElementById("podiumTop3");
   const restBody = document.getElementById("leaderboardRestBody");
 
-  if (users.length === 0) {
-    podiumBox.innerHTML = '<p>Chưa có dữ liệu xếp hạng</p>';
-    return;
-  }
+  if (!podiumBox) return;
+  if (users.length === 0) { podiumBox.innerHTML = '<p>Chưa có dữ liệu xếp hạng</p>'; return; }
 
-  const top1 = users[0];
-  const top2 = users[1];
-  const top3 = users[2];
-
+  const top1 = users[0], top2 = users[1], top3 = users[2];
   let podiumHtml = '';
-  if (top2) {
-    podiumHtml += `
-      <div class="podium-card rank-2">
-        <div class="podium-badge">2</div>
-        <div class="podium-avatar">${escapeHTML(top2.user_name.slice(0, 2).toUpperCase())}</div>
-        <strong>${escapeHTML(top2.user_name)}</strong>
-        <p style="color:var(--text-sub); font-size:0.85rem; margin-top:0.3rem;">${top2.score || 0} tài liệu</p>
-      </div>`;
-  }
-  if (top1) {
-    podiumHtml += `
-      <div class="podium-card rank-1">
-        <div class="podium-badge">1</div>
-        <div class="podium-avatar">${escapeHTML(top1.user_name.slice(0, 2).toUpperCase())}</div>
-        <strong style="font-size:1.05rem;">${escapeHTML(top1.user_name)}</strong>
-        <p style="color:#f59e0b; font-weight:700; margin-top:0.3rem;">${top1.score || 0} tài liệu</p>
-      </div>`;
-  }
-  if (top3) {
-    podiumHtml += `
-      <div class="podium-card rank-3">
-        <div class="podium-badge">3</div>
-        <div class="podium-avatar">${escapeHTML(top3.user_name.slice(0, 2).toUpperCase())}</div>
-        <strong>${escapeHTML(top3.user_name)}</strong>
-        <p style="color:var(--text-sub); font-size:0.85rem; margin-top:0.3rem;">${top3.score || 0} tài liệu</p>
-      </div>`;
-  }
+  if (top2) podiumHtml += `<div class="podium-card rank-2"><div class="podium-badge">2</div><div class="podium-avatar">${escapeHTML(top2.user_name.slice(0, 2).toUpperCase())}</div><strong>${escapeHTML(top2.user_name)}</strong><p style="color:var(--text-sub); font-size:0.85rem; margin-top:0.3rem;">${top2.score || 0} tài liệu</p></div>`;
+  if (top1) podiumHtml += `<div class="podium-card rank-1"><div class="podium-badge">1</div><div class="podium-avatar">${escapeHTML(top1.user_name.slice(0, 2).toUpperCase())}</div><strong style="font-size:1.05rem;">${escapeHTML(top1.user_name)}</strong><p style="color:#f59e0b; font-weight:700; margin-top:0.3rem;">${top1.score || 0} tài liệu</p></div>`;
+  if (top3) podiumHtml += `<div class="podium-card rank-3"><div class="podium-badge">3</div><div class="podium-avatar">${escapeHTML(top3.user_name.slice(0, 2).toUpperCase())}</div><strong>${escapeHTML(top3.user_name)}</strong><p style="color:var(--text-sub); font-size:0.85rem; margin-top:0.3rem;">${top3.score || 0} tài liệu</p></div>`;
+
   podiumBox.innerHTML = podiumHtml;
 
   const restUsers = users.slice(3);
@@ -380,40 +376,22 @@ async function loadLeaderboard() {
   `).join('');
 }
 
-// HÀM TIỆN ÍCH DÙNG CHUNG
 document.getElementById("btnGoToUpload")?.addEventListener("click", () => switchPage("upload"));
-
-document.addEventListener("click", (e) => {
-  const nav = e.target.closest("[data-page]");
-  if (nav) switchPage(nav.dataset.page);
-});
+document.addEventListener("click", (e) => { const nav = e.target.closest("[data-page]"); if (nav) switchPage(nav.dataset.page); });
 document.getElementById("menuToggle")?.addEventListener("click", () => elSidebar.classList.toggle("open"));
-document.getElementById("logoutBtn")?.addEventListener("click", async () => {
-  await supabaseClient.auth.signOut();
-  window.location.href = "login.html";
-});
+document.getElementById("logoutBtn")?.addEventListener("click", async () => { await supabaseClient.auth.signOut(); window.location.href = "login.html"; });
 
 const pageTitles = { documents: "Tài liệu", leaderboard: "Bảng xếp hạng", upload: "Upload", discussion: "Thảo luận", account: "Tài khoản" };
-function switchPage(page) {
-  document.querySelectorAll(".nav-item").forEach(i => i.classList.toggle("active", i.dataset.page === page));
+function switchPage(p) {
+  document.querySelectorAll(".nav-item").forEach(i => i.classList.toggle("active", i.dataset.page === p));
   document.querySelectorAll(".page").forEach(s => s.classList.remove("active"));
-  document.getElementById(`${page}Page`)?.classList.add("active");
-  elBreadcrumbCurrent.textContent = pageTitles[page] || "Tài liệu";
+  document.getElementById(`${p}Page`)?.classList.add("active");
+  elBreadcrumbCurrent.textContent = pageTitles[p] || "Tài liệu";
   elSidebar.classList.remove("open");
-  if (window.location.hash !== `#${page}`) history.replaceState(null, "", `#${page}`);
+  if (window.location.hash !== `#${p}`) history.replaceState(null, "", `#${p}`);
 }
-function restorePageFromHash() {
-  const saved = window.location.hash.replace("#", "");
-  if (saved && pageTitles[saved]) switchPage(saved);
-}
-
-function showToast(title, message) {
-  clearTimeout(toastTimer);
-  document.getElementById("toastTitle").textContent = title;
-  document.getElementById("toastMessage").textContent = message;
-  document.getElementById("toast").classList.add("show");
-  toastTimer = setTimeout(() => document.getElementById("toast").classList.remove("show"), 2800);
-}
+function restorePageFromHash() { const s = window.location.hash.replace("#", ""); if (s && pageTitles[s]) switchPage(s); }
+function showToast(t, m) { clearTimeout(toastTimer); document.getElementById("toastTitle").textContent = t; document.getElementById("toastMessage").textContent = m; document.getElementById("toast").classList.add("show"); toastTimer = setTimeout(() => document.getElementById("toast").classList.remove("show"), 2800); }
 function formatDate(iso) { return new Date(iso).toLocaleDateString("vi-VN"); }
 function formatDateTime(iso) { return new Date(iso).toLocaleString("vi-VN"); }
 function escapeHTML(v = "") { return String(v).replace(/[&<>'"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c])); }
