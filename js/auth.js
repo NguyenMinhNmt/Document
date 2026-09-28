@@ -1,9 +1,9 @@
 /* ==========================================================================
-   AUTH.JS - Xác thực OTP Linh Hoạt Độ Dài (Supabase Auth Native)
+   AUTH.JS - Xác thực OTP Linh Hoạt 1 Ô (Đã Fix Lỗi Chuyển Luồng)
    ========================================================================== */
 
 let currentAuthMode = "LOGIN";
-let tempRegisterData = null;
+let tempRegisterData = null; // Biến la bàn xác định luồng (Có dữ liệu = Đăng ký, Null = Quên MK)
 let currentOtpEmail = "";
 let otpCountdownTimer = null;
 let toastTimer;
@@ -124,11 +124,14 @@ formRegister?.addEventListener("submit", async (e) => {
         if (existingUser.status) throw new Error("Email đã được đăng ký. Vui lòng đăng nhập.");
         else throw new Error("Email này đang chờ duyệt. Không thể đăng ký lại!");
       }
+      // Gán dữ liệu làm la bàn cho luồng Đăng ký
       tempRegisterData = { name: regName, email: email, password: regPass };
     } else {
+      // Đang ở luồng Quên mật khẩu
       const existingUser = existingUsers?.find(u => u.email?.toLowerCase() === email.toLowerCase());
       if (!existingUser) throw new Error("Email chưa từng đăng ký tài khoản.");
       if (!existingUser.status) throw new Error("Tài khoản chưa duyệt, không thể khôi phục mật khẩu.");
+      // Xóa dữ liệu để báo hiệu luồng Quên mật khẩu
       tempRegisterData = null;
     }
 
@@ -146,7 +149,7 @@ formRegister?.addEventListener("submit", async (e) => {
 async function sendOtpCode(email) {
   let errorObj = null;
 
-  if (currentAuthMode === "REGISTER") {
+  if (tempRegisterData) { // NẾU LÀ LUỒNG ĐĂNG KÝ
     const { error } = await supabaseClient.auth.signUp({
       email: email,
       password: tempRegisterData.password
@@ -154,11 +157,11 @@ async function sendOtpCode(email) {
 
     if (error && error.message.includes("already registered")) {
       const { error: resendErr } = await supabaseClient.auth.resend({ type: 'signup', email: email });
-      if (resendErr) errorObj = new Error("Tài khoản bị kẹt. Vui lòng vào Supabase -> Auth -> Users để xóa Email này và thử lại!");
+      if (resendErr) errorObj = new Error("Tài khoản bị kẹt. Vui lòng vào Supabase -> Auth -> Users xóa Email này và thử lại!");
     } else if (error) {
       errorObj = error;
     }
-  } else {
+  } else { // NẾU LÀ LUỒNG QUÊN MẬT KHẨU
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email);
     errorObj = error;
   }
@@ -179,16 +182,16 @@ async function sendOtpCode(email) {
   startOtpTimer();
 }
 
-/* GỬI LẠI MÃ */
+/* ================= GỬI LẠI MÃ ================= */
 document.getElementById("btnResendOtp")?.addEventListener("click", async () => {
   if (!currentOtpEmail) return;
   const btn = document.getElementById("btnResendOtp");
   btn.disabled = true;
   btn.textContent = "⏳ Đang gửi...";
   try {
-    if (currentAuthMode === "REGISTER") {
+    if (tempRegisterData) { // NẾU LÀ LUỒNG ĐĂNG KÝ
       await supabaseClient.auth.resend({ type: 'signup', email: currentOtpEmail });
-    } else {
+    } else { // NẾU LÀ LUỒNG QUÊN MẬT KHẨU
       await supabaseClient.auth.resetPasswordForEmail(currentOtpEmail);
     }
     showToast("Thành công", "Mã OTP mới đã được gửi!");
@@ -214,7 +217,8 @@ formOtp?.addEventListener("submit", async (e) => {
   btn.textContent = "⏳ Đang xác minh...";
 
   try {
-    const authType = currentAuthMode === "REGISTER" ? "signup" : "recovery";
+    // Tự động nhận diện loại token dựa trên la bàn tempRegisterData
+    const authType = tempRegisterData ? "signup" : "recovery";
 
     const { data: verifyData, error: verifyErr } = await supabaseClient.auth.verifyOtp({
       email: currentOtpEmail,
@@ -224,17 +228,19 @@ formOtp?.addEventListener("submit", async (e) => {
 
     if (verifyErr) throw new Error("Mã OTP không chính xác hoặc đã hết hạn!");
 
-    if (currentAuthMode === "REGISTER") {
+    if (tempRegisterData) {
+      // HOÀN TẤT ĐĂNG KÝ
       await supabaseClient.from("user").upsert({
         id: verifyData.user.id,
         user_name: tempRegisterData.name,
         email: tempRegisterData.email,
-        status: false
+        status: false // Đợi duyệt
       });
       showToast("Tạo tài khoản thành công!", "Tài khoản của bạn đã được gửi đến Admin duyệt.");
-      tempRegisterData = null;
+      tempRegisterData = null; // Xóa la bàn
       setTimeout(() => switchAuthMode("LOGIN"), 2000);
     } else {
+      // HOÀN TẤT QUÊN MẬT KHẨU
       showToast("Thành công", "Vui lòng nhập mật khẩu mới.");
       switchAuthMode("RESET_PASSWORD");
     }
