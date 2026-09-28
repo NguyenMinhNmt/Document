@@ -396,13 +396,12 @@
         </section>
         <!-- ================= TAB: CÀI ĐẶT ================= -->
         <section class="page" id="settingsPage">
-
-          <!-- KHỐI 1: CẤU HÌNH GIAO DIỆN & HỆ THỐNG (MỚI BỔ SUNG) -->
+          <!-- KHỐI 1: CẤU HÌNH GIAO DIỆN & HỆ THỐNG -->
           <div class="page-heading">
             <h1>Cấu hình giao diện & Hệ thống</h1>
           </div>
-          <section class="card" style="margin-bottom: 2rem;">
-            <div class="form-grid single" style="padding:1.5rem;">
+          <section class="card" style="margin-bottom: 2rem; padding:1.5rem;">
+            <div class="form-grid single" style="padding:0; margin-bottom:1.25rem;">
               <div class="form-field">
                 <label for="settingSiteName">Tên trang web</label>
                 <input class="form-control" type="text" id="settingSiteName" placeholder="Ví dụ: Web Tài Liệu">
@@ -417,9 +416,13 @@
                 <input class="form-control" type="number" id="settingTrashDays" value="30" placeholder="30">
               </div>
             </div>
+
+            <!-- NÚT CẬP NHẬT RIÊNG CHO KHỐI 1 -->
+            <button type="button" class="button button-primary" id="btnSaveSystemConfig" onclick="saveSiteSettings()">✓
+              Cập nhật giao diện & Hệ thống</button>
           </section>
 
-          <!-- KHỐI 2: THÔNG TIN LIÊN HỆ (GIỮ NGUYÊN CODE CŨ CỦA BẠN) -->
+          <!-- KHỐI 2: THÔNG TIN LIÊN HỆ -->
           <div class="page-heading">
             <h1>Thông tin liên hệ</h1>
           </div>
@@ -432,8 +435,8 @@
               <div class="form-field"><label>Facebook</label><input class="form-control" type="text"
                   id="settingFacebook"></div>
 
-              <!-- NÚT LƯU CHUNG CHO TẤT CẢ CÀI ĐẶT -->
-              <button type="submit" class="button button-primary" id="settingsSubmitBtn">✓ Lưu cài đặt</button>
+              <button type="submit" class="button button-primary" id="settingsSubmitBtn">✓ Lưu thông tin liên
+                hệ</button>
             </form>
           </section>
         </section>

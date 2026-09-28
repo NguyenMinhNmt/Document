@@ -30,9 +30,10 @@ const elSidebar = document.getElementById("sidebar");
 const elBreadcrumbCurrent = document.getElementById("breadcrumbCurrent");
 const elUserNameLabel = document.getElementById("userNameLabel");
 const elUserAvatar = document.getElementById("userAvatar");
-
+await loadSettings(); // Thêm dòng này để cập nhật Logo & Tên góc trái khi khởi chạy
 bootstrapAdminPage();
 
+// Bổ sung gọi loadSettings() vào hàm khởi chạy admin.js
 async function bootstrapAdminPage() {
   restorePageFromHash();
   renderFromCache();
@@ -64,6 +65,7 @@ async function bootstrapAdminPage() {
   if (elUserAvatar) elUserAvatar.textContent = currentUser.name.slice(0, 2).toUpperCase();
 
   initThemeToggle(profile.color);
+  await loadSettings(); // TẢI CẤU HÌNH ĐỂ TỰ ĐỔI TÊN & LOGO GÓC TRÁI NGAY TỪ ĐẦU
   await CommentModule.init("commentRoot", { userId: currentUser.id, isAdmin: true });
 
   const currentTab = window.location.hash.replace("#", "") || "files";
