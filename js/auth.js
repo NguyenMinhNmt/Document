@@ -1,5 +1,5 @@
 /* ==========================================================================
-   AUTH.JS - Đồng bộ 100% Mã OTP 6 số giữa Web và Email Gmail
+   AUTH.JS - Đồng bộ Hệ thống Xác thực OTP 8 Chữ Số Hoàn Chỉnh
    ========================================================================== */
 
 let currentAuthMode = "LOGIN";
@@ -48,7 +48,7 @@ function switchAuthMode(mode) {
     document.getElementById("regSubmitBtn").textContent = "Gửi mã OTP khôi phục";
   } else if (mode === "OTP") {
     elTitle.textContent = "Xác thực mã OTP";
-    elSubTitle.textContent = "Nhập 6 chữ số vừa được gửi đến Email";
+    elSubTitle.textContent = "Nhập 8 chữ số vừa được gửi đến Email";
     formOtp.hidden = false;
   } else if (mode === "RESET_PASSWORD") {
     elTitle.textContent = "Đặt lại mật khẩu mới";
@@ -70,7 +70,6 @@ formLogin?.addEventListener("submit", async (e) => {
   try {
     let targetEmail = inputAccount;
 
-    // 1. Tìm thông tin trong bảng user theo user_name hoặc email
     const { data: userRecords } = await supabaseClient
       .from("user")
       .select("id, user_name, status, is_admin, email")
@@ -87,7 +86,6 @@ formLogin?.addEventListener("submit", async (e) => {
       }
     }
 
-    // 2. Đăng nhập với Supabase Auth
     let { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({
       email: targetEmail,
       password
@@ -167,13 +165,13 @@ formRegister?.addEventListener("submit", async (e) => {
   }
 });
 
-/* ================= 3. HÀM TẠO MÃ OTP VÀ TRUYỀN BIẾN CHÍNH XÁC SAN GMAIL ================= */
+/* ================= 3. HÀM TẠO MÃ OTP 8 CHỮ SỐ VÀ GỬI MAIL ================= */
 async function sendOtpCode(email) {
-  // Tạo mã OTP 6 số ngẫu nhiên
-  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+  // Tạo mã OTP 8 số ngẫu nhiên chính xác
+  const otpCode = Math.floor(10000000 + Math.random() * 90000000).toString();
   const expiresAt = new Date(Date.now() + 3 * 60 * 1000).toISOString();
 
-  // 1. Lưu bản ghi OTP vào bảng otp_codes trong DB
+  // 1. Lưu bản ghi OTP 8 số vào bảng otp_codes trong DB
   const { error: dbErr } = await supabaseClient.from("otp_codes").insert({
     email: email,
     code: otpCode,
@@ -183,7 +181,7 @@ async function sendOtpCode(email) {
 
   if (dbErr) throw dbErr;
 
-  // 2. Truyền mã 6 số vào data để Supabase chèn vào Email Template
+  // 2. Kích hoạt Supabase gửi Email OTP
   await supabaseClient.auth.signInWithOtp({
     email: email,
     options: {
@@ -196,7 +194,7 @@ async function sendOtpCode(email) {
   currentOtpEmail = email;
   document.getElementById("otpTargetEmail").textContent = email;
 
-  // Clear 6 ô nhập mã
+  // Xóa sạch 8 ô nhập mã OTP
   document.querySelectorAll(".otp-digit").forEach(i => i.value = "");
   document.querySelectorAll(".otp-digit")[0]?.focus();
 
@@ -221,18 +219,19 @@ document.getElementById("btnResendOtp")?.addEventListener("click", async () => {
   }
 });
 
-/* ================= 4. XÁC THỰC MÃ OTP 6 SỐ ================= */
+/* ================= 4. XÁC THỰC MÃ OTP 8 CHỮ SỐ ================= */
 formOtp?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const digits = Array.from(document.querySelectorAll(".otp-digit")).map(i => i.value).join("");
   const btn = document.getElementById("otpSubmitBtn");
 
-  if (digits.length < 6) return showToast("Lỗi", "Vui lòng nhập đủ 6 chữ số OTP.");
+  if (digits.length < 8) return showToast("Lỗi", "Vui lòng nhập đủ 8 chữ số OTP.");
 
   btn.disabled = true;
   btn.textContent = "⏳ Đang xác minh...";
 
   try {
+    // Trích xuất mã OTP 8 số trong bảng otp_codes
     const { data: otpRecord, error: fetchErr } = await supabaseClient
       .from("otp_codes")
       .select("*")
