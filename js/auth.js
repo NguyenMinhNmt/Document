@@ -1,9 +1,10 @@
 /* ==========================================================================
-   AUTH.JS - Xác thực OTP Linh Hoạt 1 Ô (Đã Fix Lỗi Chuyển Luồng)
+   AUTH.JS - Phân luồng Định hướng Rõ Ràng & Chống Trôi Luồng OTP
    ========================================================================== */
 
 let currentAuthMode = "LOGIN";
-let tempRegisterData = null; // Biến la bàn xác định luồng (Có dữ liệu = Đăng ký, Null = Quên MK)
+let authIntent = ""; // Biến la bàn phân luồng: 'REGISTER' hoặc 'FORGOT_PASSWORD'
+let tempRegisterData = null; // Lưu giữ liệu tên, mật khẩu khi Đăng ký
 let currentOtpEmail = "";
 let otpCountdownTimer = null;
 let toastTimer;
@@ -99,7 +100,7 @@ formLogin?.addEventListener("submit", async (e) => {
   }
 });
 
-/* ================= 2. XỬ LÝ NÚT NHẬN MÃ OTP ================= */
+/* ================= 2. KIỂM TRA TRƯỚC KHI GỬI OTP ================= */
 formRegister?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const email = document.getElementById("regEmail").value.trim();
@@ -111,7 +112,10 @@ formRegister?.addEventListener("submit", async (e) => {
   try {
     const { data: existingUsers } = await supabaseClient.from("user").select("id, status, user_name, email");
 
-    if (currentAuthMode === "REGISTER") {
+    // ĐẶT LA BÀN LUỒNG: REGISTER HAY FORGOT_PASSWORD
+    authIntent = currentAuthMode;
+
+    if (authIntent === "REGISTER") {
       const regName = document.getElementById("regName").value.trim();
       const regPass = document.getElementById("regPassword").value;
       if (!regName || !regPass) throw new Error("Vui lòng nhập đủ thông tin.");
@@ -124,15 +128,11 @@ formRegister?.addEventListener("submit", async (e) => {
         if (existingUser.status) throw new Error("Email đã được đăng ký. Vui lòng đăng nhập.");
         else throw new Error("Email này đang chờ duyệt. Không thể đăng ký lại!");
       }
-      // Gán dữ liệu làm la bàn cho luồng Đăng ký
       tempRegisterData = { name: regName, email: email, password: regPass };
-    } else {
-      // Đang ở luồng Quên mật khẩu
+    } else if (authIntent === "FORGOT_PASSWORD") {
       const existingUser = existingUsers?.find(u => u.email?.toLowerCase() === email.toLowerCase());
       if (!existingUser) throw new Error("Email chưa từng đăng ký tài khoản.");
       if (!existingUser.status) throw new Error("Tài khoản chưa duyệt, không thể khôi phục mật khẩu.");
-      // Xóa dữ liệu để báo hiệu luồng Quên mật khẩu
-      tempRegisterData = null;
     }
 
     await sendOtpCode(email);
@@ -145,23 +145,24 @@ formRegister?.addEventListener("submit", async (e) => {
   }
 });
 
-/* ================= 3. GỬI OTP GỐC SUPABASE ================= */
+/* ================= 3. GỬI OTP DỰA THEO LA BÀN LUỒNG ================= */
 async function sendOtpCode(email) {
   let errorObj = null;
 
-  if (tempRegisterData) { // NẾU LÀ LUỒNG ĐĂNG KÝ
+  if (authIntent === "REGISTER") {
     const { error } = await supabaseClient.auth.signUp({
       email: email,
       password: tempRegisterData.password
     });
 
-    if (error && error.message.includes("already registered")) {
+    // Nếu bị kẹt vì OTP signup trước đó chưa xác minh
+    if (error && error.message.toLowerCase().includes("already registered")) {
       const { error: resendErr } = await supabaseClient.auth.resend({ type: 'signup', email: email });
-      if (resendErr) errorObj = new Error("Tài khoản bị kẹt. Vui lòng vào Supabase -> Auth -> Users xóa Email này và thử lại!");
+      if (resendErr) errorObj = new Error("Tài khoản bị kẹt. Vui lòng vào Supabase -> Auth -> Users xóa Email này đi và thử đăng ký lại!");
     } else if (error) {
       errorObj = error;
     }
-  } else { // NẾU LÀ LUỒNG QUÊN MẬT KHẨU
+  } else if (authIntent === "FORGOT_PASSWORD") {
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email);
     errorObj = error;
   }
@@ -171,7 +172,6 @@ async function sendOtpCode(email) {
   currentOtpEmail = email;
   document.getElementById("otpTargetEmail").textContent = email;
 
-  // Làm sạch ô nhập
   const otpInput = document.getElementById("otpSingleInput");
   if (otpInput) {
     otpInput.value = "";
@@ -182,16 +182,16 @@ async function sendOtpCode(email) {
   startOtpTimer();
 }
 
-/* ================= GỬI LẠI MÃ ================= */
+/* GỬI LẠI MÃ CHÍNH XÁC LUỒNG */
 document.getElementById("btnResendOtp")?.addEventListener("click", async () => {
   if (!currentOtpEmail) return;
   const btn = document.getElementById("btnResendOtp");
   btn.disabled = true;
   btn.textContent = "⏳ Đang gửi...";
   try {
-    if (tempRegisterData) { // NẾU LÀ LUỒNG ĐĂNG KÝ
+    if (authIntent === "REGISTER") {
       await supabaseClient.auth.resend({ type: 'signup', email: currentOtpEmail });
-    } else { // NẾU LÀ LUỒNG QUÊN MẬT KHẨU
+    } else if (authIntent === "FORGOT_PASSWORD") {
       await supabaseClient.auth.resetPasswordForEmail(currentOtpEmail);
     }
     showToast("Thành công", "Mã OTP mới đã được gửi!");
@@ -203,11 +203,10 @@ document.getElementById("btnResendOtp")?.addEventListener("click", async () => {
   }
 });
 
-/* ================= 4. XÁC THỰC MÃ LINH HOẠT VỚI SUPABASE AUTH ================= */
+/* ================= 4. XÁC THỰC MÃ VÀ KẾT THÚC ĐÚNG MỤC TIÊU ================= */
 formOtp?.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  // Đọc mã từ 1 ô duy nhất
   const digits = document.getElementById("otpSingleInput").value.trim();
   const btn = document.getElementById("otpSubmitBtn");
 
@@ -217,8 +216,8 @@ formOtp?.addEventListener("submit", async (e) => {
   btn.textContent = "⏳ Đang xác minh...";
 
   try {
-    // Tự động nhận diện loại token dựa trên la bàn tempRegisterData
-    const authType = tempRegisterData ? "signup" : "recovery";
+    // Ép đúng loại Token theo Luồng
+    const authType = authIntent === "REGISTER" ? "signup" : "recovery";
 
     const { data: verifyData, error: verifyErr } = await supabaseClient.auth.verifyOtp({
       email: currentOtpEmail,
@@ -228,19 +227,24 @@ formOtp?.addEventListener("submit", async (e) => {
 
     if (verifyErr) throw new Error("Mã OTP không chính xác hoặc đã hết hạn!");
 
-    if (tempRegisterData) {
-      // HOÀN TẤT ĐĂNG KÝ
+    if (authIntent === "REGISTER") {
+      // ĐĂNG KÝ XONG -> ĐIỀN VÀO BẢNG USER VÀ QUAY VỀ ĐĂNG NHẬP
       await supabaseClient.from("user").upsert({
         id: verifyData.user.id,
         user_name: tempRegisterData.name,
         email: tempRegisterData.email,
-        status: false // Đợi duyệt
+        status: false
       });
       showToast("Tạo tài khoản thành công!", "Tài khoản của bạn đã được gửi đến Admin duyệt.");
-      tempRegisterData = null; // Xóa la bàn
+
+      // Xóa Cache La bàn
+      tempRegisterData = null;
+      authIntent = "LOGIN";
+
       setTimeout(() => switchAuthMode("LOGIN"), 2000);
-    } else {
-      // HOÀN TẤT QUÊN MẬT KHẨU
+
+    } else if (authIntent === "FORGOT_PASSWORD") {
+      // QUÊN MẬT KHẨU XONG -> CHUYỂN SANG ĐẶT MK MỚI
       showToast("Thành công", "Vui lòng nhập mật khẩu mới.");
       switchAuthMode("RESET_PASSWORD");
     }

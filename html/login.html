@@ -50,7 +50,7 @@
           style="width: 100%; justify-content: center;">Đăng nhập</button>
       </form>
 
-      <!-- FORM ĐĂNG KÝ -->
+      <!-- FORM ĐĂNG KÝ / QUÊN MK -->
       <form id="registerForm" hidden>
         <div class="form-field" id="fieldRegName" style="margin-bottom: 1rem;">
           <label for="regName">Tên hiển thị (Username)</label>
@@ -116,7 +116,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/config.js"></script>
-  <script src="../js/auth.js"></script>
+  <!-- MÃ CHỐNG CACHE TRÌNH DUYỆT -->
+  <script src="../js/auth.js?v=999"></script>
 </body>
 
 </html>
