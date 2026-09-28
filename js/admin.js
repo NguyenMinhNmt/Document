@@ -865,12 +865,101 @@ async function loadHistory() {
   }
 }
 
+/**
+ * HÀM 1: Tải Cài Đặt Cấu Hình Hệ Thống & Cập Nhật Tên / Logo Ở Góc Trên Bên Trái
+ */
 async function loadSettings() {
-  const { data } = await supabaseClient.from("site_setting").select("phone, email, facebook").eq("id", 1).single();
-  if (!data) return;
-  if (document.getElementById("settingPhone")) document.getElementById("settingPhone").value = data.phone || "";
-  if (document.getElementById("settingEmail")) document.getElementById("settingEmail").value = data.email || "";
-  if (document.getElementById("settingFacebook")) document.getElementById("settingFacebook").value = data.facebook || "";
+  try {
+    // 1. Lấy dữ liệu từ bảng site_settings
+    const { data: siteData } = await supabaseClient
+      .from("site_settings")
+      .select("*")
+      .eq("id", 1)
+      .maybeSingle();
+
+    if (siteData) {
+      // Đổ dữ liệu hiện tại vào ô nhập
+      if (document.getElementById("settingSiteName")) {
+        document.getElementById("settingSiteName").value = siteData.site_name || "";
+      }
+      if (document.getElementById("settingSiteLogo")) {
+        document.getElementById("settingSiteLogo").value = siteData.site_logo || "";
+      }
+      if (document.getElementById("settingTrashDays")) {
+        document.getElementById("settingTrashDays").value = siteData.trash_retention_days || 30;
+      }
+
+      // CẬP NHẬT LOGO VÀ TÊN Ở GÓC TRÊN BÊN TRÁI SIDEBAR (.brand)
+      applyBrandSettings(siteData.site_name, siteData.site_logo);
+    }
+
+    // 2. Lấy dữ liệu từ bảng site_setting (Thông tin liên hệ cũ)
+    const { data: contactData } = await supabaseClient
+      .from("site_setting")
+      .select("phone, email, facebook")
+      .eq("id", 1)
+      .maybeSingle();
+
+    if (contactData) {
+      if (document.getElementById("settingPhone")) document.getElementById("settingPhone").value = contactData.phone || "";
+      if (document.getElementById("settingEmail")) document.getElementById("settingEmail").value = contactData.email || "";
+      if (document.getElementById("settingFacebook")) document.getElementById("settingFacebook").value = contactData.facebook || "";
+    }
+  } catch (err) {
+    console.error("Lỗi tải cài đặt:", err.message);
+  }
+}
+
+/**
+ * HÀM HỖ TRỢ: Đổi giao diện Logo / Tên góc trái Sidebar
+ */
+function applyBrandSettings(siteName, siteLogo) {
+  const brandEl = document.querySelector(".brand");
+  if (!brandEl) return;
+
+  const brandMark = brandEl.querySelector(".brand-mark");
+  const brandTitle = brandEl.querySelector("strong");
+
+  // Cập nhật Tên trang web
+  if (brandTitle && siteName) {
+    brandTitle.textContent = siteName;
+    document.title = `${siteName} - Admin Panel`;
+  }
+
+  // Cập nhật Logo (Nếu nhập Link ảnh http/https -> hiển thị <img>, nếu nhập Chữ cái -> hiển thị Chữ)
+  if (brandMark && siteLogo) {
+    if (siteLogo.startsWith("http://") || siteLogo.startsWith("https://")) {
+      brandMark.innerHTML = `<img src="${escapeHTML(siteLogo)}" alt="Logo" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;">`;
+    } else {
+      brandMark.textContent = siteLogo.toUpperCase().slice(0, 2);
+    }
+  }
+}
+
+/**
+ * HÀM 2: Lưu Cấu hình Website (Tên Web, Logo, Số ngày Thùng rác)
+ */
+async function saveSiteSettings() {
+  const siteName = document.getElementById("settingSiteName")?.value.trim();
+  const siteLogo = document.getElementById("settingSiteLogo")?.value.trim();
+  const trashDays = parseInt(document.getElementById("settingTrashDays")?.value) || 30;
+
+  try {
+    const { error } = await supabaseClient.from("site_settings").upsert({
+      id: 1,
+      site_name: siteName,
+      site_logo: siteLogo,
+      trash_retention_days: trashDays
+    });
+
+    if (error) throw error;
+
+    // Cập nhật ngay lập tức giao diện logo/tên trên màn hình mà không cần load lại trang
+    applyBrandSettings(siteName, siteLogo);
+  } catch (err) {
+    console.error("Lỗi lưu site_settings:", err.message);
+    throw err;
+  }
 }
 
 document.getElementById("settingsForm")?.addEventListener("submit", async (e) => {
