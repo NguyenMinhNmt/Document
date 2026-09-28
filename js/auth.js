@@ -1,5 +1,5 @@
 /* ==========================================================================
-   AUTH.JS - Đồng bộ 100% Mã OTP 6 Chữ Số & Đăng Nhập Username/Email
+   AUTH.JS - Chuẩn hóa Supabase Auth OTP Native 100%
    ========================================================================== */
 
 let currentAuthMode = "LOGIN";
@@ -8,7 +8,7 @@ let currentOtpEmail = "";
 let otpCountdownTimer = null;
 let toastTimer;
 
-// Elements
+// DOM Elements
 const elTitle = document.getElementById("authTitle");
 const elSubTitle = document.getElementById("authSubTitle");
 const formLogin = document.getElementById("loginForm");
@@ -16,7 +16,7 @@ const formRegister = document.getElementById("registerForm");
 const formOtp = document.getElementById("otpForm");
 const formResetPassword = document.getElementById("resetPasswordForm");
 
-// Chuyển đổi màn hình
+// Chuyển chế độ giao diện
 document.getElementById("btnShowRegister")?.addEventListener("click", (e) => { e.preventDefault(); switchAuthMode("REGISTER"); });
 document.getElementById("btnShowLoginFromReg")?.addEventListener("click", (e) => { e.preventDefault(); switchAuthMode("LOGIN"); });
 document.getElementById("btnShowForgot")?.addEventListener("click", (e) => { e.preventDefault(); switchAuthMode("FORGOT_PASSWORD"); });
@@ -57,7 +57,7 @@ function switchAuthMode(mode) {
   }
 }
 
-/* ================= 1. ĐĂNG NHẬP (HỖ TRỢ CẢ USERNAME VÀ EMAIL) ================= */
+/* ================= 1. ĐĂNG NHẬP (USERNAME VÀ EMAIL) ================= */
 formLogin?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const inputAccount = document.getElementById("loginEmail").value.trim();
@@ -70,7 +70,6 @@ formLogin?.addEventListener("submit", async (e) => {
   try {
     let targetEmail = inputAccount;
 
-    // 1. Tìm trong bảng user theo Username hoặc Email
     const { data: userRecords } = await supabaseClient
       .from("user")
       .select("id, user_name, status, is_admin, email")
@@ -90,7 +89,6 @@ formLogin?.addEventListener("submit", async (e) => {
       targetEmail = userProfile.email;
     }
 
-    // 2. Đăng nhập với Supabase Auth bằng Email
     const { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({
       email: targetEmail,
       password
@@ -113,7 +111,7 @@ formLogin?.addEventListener("submit", async (e) => {
   }
 });
 
-/* ================= 2. XỬ LÝ YÊU CẦU MÃ OTP (ĐĂNG KÝ / QUÊN MK) ================= */
+/* ================= 2. XỬ LÝ ĐĂNG KÝ / QUÊN MK ================= */
 formRegister?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const email = document.getElementById("regEmail").value.trim();
@@ -146,7 +144,6 @@ formRegister?.addEventListener("submit", async (e) => {
       if (!existingUser) throw new Error("Email này chưa từng đăng ký tài khoản.");
       if (!existingUser.status) throw new Error("Tài khoản chưa được duyệt nên chưa thể khôi phục mật khẩu.");
 
-      // GHI LỊCH SỬ THAO TÁC QUÊN MẬT KHẨU
       await supabaseClient.from("history_file").insert({
         change: `Yêu cầu mã OTP khôi phục mật khẩu (${email})`,
         id_user: existingUser.id
@@ -165,38 +162,29 @@ formRegister?.addEventListener("submit", async (e) => {
   }
 });
 
-/* ================= 3. TẠO MÃ OTP 6 SỐ VÀ TRUYỀN SANG EMAIL ================= */
+/* ================= 3. HÀM GỬI MÃ OTP CHUẨN TỪ SUPABASE ================= */
 async function sendOtpCode(email) {
-  // 1. Tạo ngẫu nhiên mã OTP 6 số ngẫu nhiên
-  const newOtpCode = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiresAt = new Date(Date.now() + 3 * 60 * 1000).toISOString();
+  let error = null;
 
-  // 2. Lưu trực tiếp vào bảng otp_codes
-  const { error: dbErr } = await supabaseClient.from("otp_codes").insert({
-    email: email,
-    code: newOtpCode,
-    type: currentAuthMode === "REGISTER" ? "REGISTER" : "FORGOT_PASSWORD",
-    expires_at: expiresAt
-  });
+  if (currentAuthMode === "FORGOT_PASSWORD") {
+    // Gửi OTP cho luồng khôi phục mật khẩu
+    const res = await supabaseClient.auth.resetPasswordForEmail(email);
+    error = res.error;
+  } else {
+    // Gửi OTP cho luồng đăng ký/đăng nhập
+    const res = await supabaseClient.auth.signInWithOtp({
+      email: email,
+      options: { shouldCreateUser: false }
+    });
+    error = res.error;
+  }
 
-  if (dbErr) throw dbErr;
-
-  // 3. Ép truyền biến custom_otp chứa mã 6 số vào Email Template
-  const { error: mailErr } = await supabaseClient.auth.signInWithOtp({
-    email: email,
-    options: {
-      data: {
-        custom_otp: newOtpCode
-      }
-    }
-  });
-
-  if (mailErr) throw mailErr;
+  if (error) throw error;
 
   currentOtpEmail = email;
   document.getElementById("otpTargetEmail").textContent = email;
 
-  // Clear các ô nhập OTP
+  // Clear 6 ô nhập mã
   document.querySelectorAll(".otp-digit").forEach(i => i.value = "");
   document.querySelectorAll(".otp-digit")[0]?.focus();
 
@@ -213,7 +201,7 @@ document.getElementById("btnResendOtp")?.addEventListener("click", async () => {
 
   try {
     await sendOtpCode(currentOtpEmail);
-    showToast("Thành công", "Đã gửi mã OTP mới về Email.");
+    showToast("Thành công", "Mã OTP mới đã được gửi về Email.");
   } catch (err) {
     showToast("Thất bại", err.message);
   } finally {
@@ -222,7 +210,7 @@ document.getElementById("btnResendOtp")?.addEventListener("click", async () => {
   }
 });
 
-/* ================= 4. XÁC THỰC MÃ OTP TRỰC TIẾP TỪ DATABASE ================= */
+/* ================= 4. XÁC THỰC MÃ OTP TRỰC TIẾP VỚI SUPABASE AUTH ================= */
 formOtp?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const digits = Array.from(document.querySelectorAll(".otp-digit")).map(i => i.value).join("");
@@ -234,24 +222,28 @@ formOtp?.addEventListener("submit", async (e) => {
   btn.textContent = "⏳ Đang xác minh...";
 
   try {
-    // Tìm mã 6 số khớp trong bảng otp_codes còn hạn sử dụng
-    const { data: otpRecord, error: fetchErr } = await supabaseClient
-      .from("otp_codes")
-      .select("*")
-      .eq("email", currentOtpEmail)
-      .eq("code", digits)
-      .eq("is_used", false)
-      .gt("expires_at", new Date().toISOString())
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // 1. Xác thực token trực tiếp qua API chính thức của Supabase
+    const type = currentAuthMode === "FORGOT_PASSWORD" ? "recovery" : "email";
 
-    if (fetchErr || !otpRecord) {
-      throw new Error("Mã OTP không chính xác hoặc đã hết hạn (3 phút).");
+    let { data: verifyData, error: verifyErr } = await supabaseClient.auth.verifyOtp({
+      email: currentOtpEmail,
+      token: digits,
+      type: type
+    });
+
+    // Nếu thử loại 'email' lỗi, thử dự phòng loại 'signup'
+    if (verifyErr && type === "email") {
+      const retry = await supabaseClient.auth.verifyOtp({
+        email: currentOtpEmail,
+        token: digits,
+        type: "signup"
+      });
+      if (!retry.error) verifyErr = null;
     }
 
-    // Đánh dấu mã OTP đã được dùng
-    await supabaseClient.from("otp_codes").update({ is_used: true }).eq("id", otpRecord.id);
+    if (verifyErr) {
+      throw new Error("Mã OTP không chính xác hoặc đã hết hạn.");
+    }
 
     if (tempRegisterData) {
       // HOÀN TẤT ĐĂNG KÝ
@@ -315,7 +307,7 @@ formResetPassword?.addEventListener("submit", async (e) => {
   }
 });
 
-/* ================= TIỆN ÍCH KHÁC ================= */
+/* ================= TIỆN ÍCH NHẬP OTP & ĐẾM NGƯỢC ================= */
 const otpInputs = document.querySelectorAll(".otp-digit");
 otpInputs.forEach((input, idx) => {
   input.addEventListener("input", (e) => {
