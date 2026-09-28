@@ -45,11 +45,12 @@
         </p>
       </div>
 
-      <!-- FORM ĐĂNG NHẬP -->
+      <!-- FORM ĐĂNG NHẬP (Cho phép nhập Email hoặc Username) -->
       <form id="loginForm">
         <div class="form-field" style="margin-bottom: 1rem;">
-          <label for="loginEmail">Email</label>
-          <input class="form-control" type="email" id="loginEmail" required placeholder="nhapemail@gmail.com">
+          <label for="loginEmail">Email hoặc Tên tài khoản</label>
+          <input class="form-control" type="text" id="loginEmail" required
+            placeholder="nhapemail@gmail.com hoặc username">
         </div>
         <div class="form-field" style="margin-bottom: 1rem;">
           <label for="loginPassword">Mật khẩu</label>
@@ -67,17 +68,17 @@
 
       <!-- FORM ĐĂNG KÝ -->
       <form id="registerForm" hidden>
-        <div class="form-field" style="margin-bottom: 1rem;">
-          <label for="regName">Tên hiển thị</label>
-          <input class="form-control" type="text" id="regName" required placeholder="Nguyễn Văn A">
+        <div class="form-field" id="fieldRegName" style="margin-bottom: 1rem;">
+          <label for="regName">Tên hiển thị (Username)</label>
+          <input class="form-control" type="text" id="regName" placeholder="Nguyễn Văn A">
         </div>
         <div class="form-field" style="margin-bottom: 1rem;">
-          <label for="regEmail">Email</label>
+          <label for="regEmail">Email chính xác</label>
           <input class="form-control" type="email" id="regEmail" required placeholder="nhapemail@gmail.com">
         </div>
-        <div class="form-field" style="margin-bottom: 1rem;">
+        <div class="form-field" id="fieldRegPass" style="margin-bottom: 1rem;">
           <label for="regPassword">Mật khẩu</label>
-          <input class="form-control" type="password" id="regPassword" required placeholder="••••••••">
+          <input class="form-control" type="password" id="regPassword" placeholder="••••••••">
         </div>
         <div style="text-align:right; margin-bottom:1.5rem;">
           <a href="#" id="btnShowLoginFromReg"
@@ -101,14 +102,14 @@
         </div>
         <div style="text-align: center; margin-bottom: 1rem; font-size:0.8rem; color:var(--text-sub);">
           <span id="otpTimerLabel">Gửi lại mã sau 60s</span>
-          <a href="#" id="btnResendOtp" style="color:var(--accent-1); text-decoration:underline;" hidden>Gửi lại mã
-            OTP</a>
+          <button type="button" id="btnResendOtp" class="button button-secondary"
+            style="margin: 0 auto; padding: 0.25rem 0.75rem; font-size:0.8rem;" hidden>🔄 Gửi lại mã OTP</button>
         </div>
         <button type="submit" class="button button-primary" id="otpSubmitBtn"
           style="width: 100%; justify-content: center;">Xác thực & Hoàn tất</button>
       </form>
 
-      <!-- FORM ĐẶT LẠI MẬT KHẨU MỚI (DÀNH CHO QUÊN MK) -->
+      <!-- FORM ĐẶT LẠI MẬT KHẨU MỚI -->
       <form id="resetPasswordForm" hidden>
         <div class="form-field" style="margin-bottom: 1rem;">
           <label for="newPassword">Mật khẩu mới</label>
