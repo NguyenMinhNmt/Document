@@ -1,5 +1,5 @@
 /* ==========================================================================
-   AUTH.JS - Đã sửa lỗi gửi mã OTP & Đăng nhập bằng Username/Email
+   AUTH.JS - Hệ thống Xác thực OTP & Đăng nhập Username/Email Hoàn Chỉnh
    ========================================================================== */
 
 let currentAuthMode = "LOGIN";
@@ -57,7 +57,7 @@ function switchAuthMode(mode) {
   }
 }
 
-/* ================= 1. ĐĂNG NHẬP BẰNG CẢ USERNAME VÀ EMAIL ================= */
+/* ================= 1. ĐĂNG NHẬP (HỖ TRỢ CẢ USERNAME VÀ EMAIL) ================= */
 formLogin?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const inputAccount = document.getElementById("loginEmail").value.trim();
@@ -70,42 +70,62 @@ formLogin?.addEventListener("submit", async (e) => {
   try {
     let targetEmail = inputAccount;
 
-    // Tìm trong bảng user xem inputAccount là username hay email
+    // 1. Tìm thông tin trong bảng user theo user_name hoặc email
     const { data: userRecords } = await supabaseClient
       .from("user")
-      .select("id, user_name, status, is_admin")
-      .or(`user_name.eq.${inputAccount},email.eq.${inputAccount}`);
+      .select("id, user_name, status, is_admin, email")
+      .or(`user_name.ilike.${inputAccount},email.ilike.${inputAccount}`);
 
     const userProfile = userRecords && userRecords[0];
 
-    if (!userProfile) {
-      throw new Error("Tài khoản hoặc Email không tồn tại trong hệ thống.");
+    // Kiểm tra trạng thái tài khoản nếu tìm thấy profile
+    if (userProfile) {
+      if (!userProfile.status) {
+        throw new Error("Tài khoản của bạn đang chờ Admin kiểm duyệt.");
+      }
+      if (userProfile.email) {
+        targetEmail = userProfile.email;
+      }
     }
 
-    if (!userProfile.status) {
-      throw new Error("Tài khoản của bạn đang chờ Admin kiểm duyệt.");
-    }
-
-    // Lấy Session Đăng nhập với Supabase Auth
-    // Nối email giả lập nếu đăng nhập bằng username không chứa @
-    if (!targetEmail.includes("@")) {
-      targetEmail = `${userProfile.user_name.toLowerCase().replace(/\s+/g, '')}@system.local`;
-    }
-
-    const { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({
+    // 2. Đăng nhập với Supabase Auth
+    let { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({
       email: targetEmail,
       password
     });
 
-    if (authError) {
-      // Thử lại nếu email gốc đã đăng ký khác
-      throw new Error("Mật khẩu hoặc tên tài khoản không chính xác.");
+    // Dự phòng: Nếu đăng nhập bằng Username chưa có cột email gắn kèm
+    if (authError && userProfile && !inputAccount.includes("@")) {
+      const possibleEmail = `${userProfile.user_name.toLowerCase().replace(/\s+/g, '')}@gmail.com`;
+      const retryResult = await supabaseClient.auth.signInWithPassword({
+        email: possibleEmail,
+        password
+      });
+
+      if (!retryResult.error) {
+        authData = retryResult.data;
+        authError = null;
+        // Cập nhật email vào bảng user cho tài khoản cũ
+        await supabaseClient.from("user").update({ email: possibleEmail }).eq("id", userProfile.id);
+      }
     }
+
+    if (authError || !authData?.user) {
+      throw new Error("Mật khẩu không chính xác hoặc tên tài khoản/email không tồn tại.");
+    }
+
+    // Lấy thông tin vai trò Admin/User chính thức
+    const { data: finalProfile } = await supabaseClient
+      .from("user")
+      .select("is_admin")
+      .eq("id", authData.user.id)
+      .single();
 
     showToast("Đăng nhập thành công!", "Đang chuyển hướng...");
     setTimeout(() => {
-      window.location.href = userProfile.is_admin ? "admin.html" : "user.html";
+      window.location.href = finalProfile?.is_admin ? "admin.html" : "user.html";
     }, 1000);
+
   } catch (err) {
     showToast("Thất bại", err.message);
   } finally {
@@ -132,11 +152,12 @@ formRegister?.addEventListener("submit", async (e) => {
 
       if (!regName || !regPass) throw new Error("Vui lòng nhập Tên hiển thị và Mật khẩu.");
 
-      // Kiểm tra trùng username hoặc email
-      const isNameTaken = existingUsers?.some(u => u.user_name === regName);
+      // Kiểm tra trùng username
+      const isNameTaken = existingUsers?.some(u => u.user_name?.toLowerCase() === regName.toLowerCase());
       if (isNameTaken) throw new Error("Tên hiển thị (Username) này đã có người dùng. Vui lòng chọn tên khác!");
 
-      const existingUser = existingUsers?.find(u => u.email === email || u.user_name === email);
+      // Kiểm tra trùng email
+      const existingUser = existingUsers?.find(u => u.email?.toLowerCase() === email.toLowerCase());
       if (existingUser) {
         if (existingUser.status) throw new Error("Email này đã được sử dụng. Vui lòng đăng nhập!");
         else throw new Error("Tài khoản này ĐANG CHỜ ADMIN DUYỆT. Vui lòng kiên nhẫn!");
@@ -144,7 +165,7 @@ formRegister?.addEventListener("submit", async (e) => {
 
       tempRegisterData = { name: regName, email: email, password: regPass };
     } else if (currentAuthMode === "FORGOT_PASSWORD") {
-      const existingUser = existingUsers?.find(u => u.email === email || u.user_name === email);
+      const existingUser = existingUsers?.find(u => u.email?.toLowerCase() === email.toLowerCase());
       if (!existingUser) throw new Error("Email này chưa từng đăng ký tài khoản.");
       if (!existingUser.status) throw new Error("Tài khoản chưa được duyệt nên chưa thể khôi phục mật khẩu.");
 
@@ -167,7 +188,7 @@ formRegister?.addEventListener("submit", async (e) => {
   }
 });
 
-/* ================= 3. HÀM TẠO MÃ OTP VÀ GỬI BÁO ================= */
+/* ================= 3. HÀM TẠO MÃ OTP VÀ GỬI MAIL ================= */
 async function sendOtpCode(email) {
   // Tạo mã OTP 6 số ngẫu nhiên
   const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -183,13 +204,13 @@ async function sendOtpCode(email) {
 
   if (dbErr) throw dbErr;
 
-  // 2. Gửi mã OTP thực tế qua Supabase Auth
+  // 2. Kích hoạt Supabase gửi Email OTP
   await supabaseClient.auth.signInWithOtp({ email: email });
 
-  // 3. Hiển thị thông báo mã OTP 6 số lên màn hình (để test nhanh không lo ngắt quãng)
   currentOtpEmail = email;
   document.getElementById("otpTargetEmail").textContent = email;
 
+  // Hiển thị thông báo mã OTP lên giao diện Toast
   showToast("MÃ OTP CỦA BẠN", `Mã xác thực 6 số là: ${otpCode}`);
 
   switchAuthMode("OTP");
@@ -213,7 +234,7 @@ document.getElementById("btnResendOtp")?.addEventListener("click", async () => {
   }
 });
 
-/* ================= 4. XÁC THỰC OTP ================= */
+/* ================= 4. XÁC THỰC MÃ OTP ================= */
 formOtp?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const digits = Array.from(document.querySelectorAll(".otp-digit")).map(i => i.value).join("");
@@ -225,7 +246,7 @@ formOtp?.addEventListener("submit", async (e) => {
   btn.textContent = "⏳ Đang xác minh...";
 
   try {
-    // Trích xuất mã OTP từ DB
+    // Trích xuất mã OTP trong bảng otp_codes
     const { data: otpRecord, error: fetchErr } = await supabaseClient
       .from("otp_codes")
       .select("*")
@@ -238,14 +259,14 @@ formOtp?.addEventListener("submit", async (e) => {
       .maybeSingle();
 
     if (fetchErr || !otpRecord) {
-      throw new Error("Mã OTP không chính xác hoặc đã hết hạn.");
+      throw new Error("Mã OTP không chính xác hoặc đã hết hạn (3 phút).");
     }
 
     // Đánh dấu mã đã dùng
     await supabaseClient.from("otp_codes").update({ is_used: true }).eq("id", otpRecord.id);
 
     if (tempRegisterData) {
-      // ĐĂNG KÝ MỚI TÀI KHOẢN
+      // ĐĂNG KÝ MỚI
       const { data: authData, error: signUpErr } = await supabaseClient.auth.signUp({
         email: tempRegisterData.email,
         password: tempRegisterData.password
@@ -253,7 +274,7 @@ formOtp?.addEventListener("submit", async (e) => {
 
       if (signUpErr) throw signUpErr;
 
-      // Lưu Profile vào bảng user (Lưu cả Username lẫn Email)
+      // Lưu Profile vào bảng user
       await supabaseClient.from("user").insert({
         id: authData.user.id,
         user_name: tempRegisterData.name,
@@ -265,7 +286,7 @@ formOtp?.addEventListener("submit", async (e) => {
       tempRegisterData = null;
       setTimeout(() => switchAuthMode("LOGIN"), 2000);
     } else {
-      // QUÊN MẬT KHẨU -> SANG BƯỚC ĐẶT MẬT KHẨU MỚI
+      // QUÊN MẬT KHẨU
       showToast("Xác thực OTP thành công", "Vui lòng nhập mật khẩu mới.");
       switchAuthMode("RESET_PASSWORD");
     }
@@ -303,7 +324,7 @@ formResetPassword?.addEventListener("submit", async (e) => {
   }
 });
 
-/* ================= TIỆN ÍCH KHÁC ================= */
+/* ================= TIỆN ÍCH NHẬP OTP & ĐẾM NGƯỢC ================= */
 const otpInputs = document.querySelectorAll(".otp-digit");
 otpInputs.forEach((input, idx) => {
   input.addEventListener("input", (e) => {
