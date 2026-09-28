@@ -30,9 +30,10 @@ const elSidebar = document.getElementById("sidebar");
 const elBreadcrumbCurrent = document.getElementById("breadcrumbCurrent");
 const elUserNameLabel = document.getElementById("userNameLabel");
 const elUserAvatar = document.getElementById("userAvatar");
-await loadSettings(); // Thêm dòng này để cập nhật Logo & Tên góc trái khi khởi chạy
+
 bootstrapAdminPage();
 
+// CÓ CHỮ async Ở ĐÂY ĐỂ SỬA DỌN SẠCH LỖI DÒNG 33
 async function bootstrapAdminPage() {
   restorePageFromHash();
   renderFromCache();
@@ -64,7 +65,7 @@ async function bootstrapAdminPage() {
   if (elUserAvatar) elUserAvatar.textContent = currentUser.name.slice(0, 2).toUpperCase();
 
   initThemeToggle(profile.color);
-  await loadSettings(); // Đã thêm async ở đầu hàm nên lệnh await này hoàn toàn hợp lệ
+  await loadSettings();
   await CommentModule.init("commentRoot", { userId: currentUser.id, isAdmin: true });
 
   const currentTab = window.location.hash.replace("#", "") || "files";
