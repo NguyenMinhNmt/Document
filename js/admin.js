@@ -991,19 +991,87 @@ async function saveSiteSettings() {
 
   if (error) showToast("Lỗi lưu cấu hình", error.message);
   else showToast("Đã lưu cấu hình hệ thống", "");
-}ync function purgeFile(id) {
-  if (!confirm("Xóa vĩnh viễn file này?")) return;
-  const file = allFilesData.find(f => f.id === id);
-  if (!file) return;
-  const bucket = file.folder?.bucket_name || "documents";
-  await supabaseClient.storage.from(bucket).remove([file.storage_path.replace(`${bucket}/`, "")]);
-  await supabaseClient.from("file").delete().eq("id", id);
-  allFilesData = allFilesData.filter(f => f.id !== id);
-  localStorage.setItem("cache_admin_files", JSON.stringify(allFilesData));
+}
+// 1. Chuyển file vào Thùng rác (Xóa mềm - Soft Delete)
+async function purgeFile(id) {
+  if (!confirm("Bạn có chắc muốn chuyển tài liệu này vào Thùng rác?")) return;
+  const { error } = await supabaseClient
+    .from("file")
+    .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) return showToast("Lỗi", error.message);
+  await loadAllFiles();
   renderFileTable();
-  showToast("Đã xóa vĩnh viễn", "");
+  showToast("Đã chuyển vào Thùng rác", "");
 }
 
+// 2. Tải danh sách Thùng rác hệ thống dành cho Admin
+async function loadAdminTrashBin() {
+  const { data } = await supabaseClient
+    .from("file")
+    .select("id, file_name, storage_path, deleted_at, id_user, folder:id_folder(display_name, bucket_name), user:id_user(user_name)")
+    .eq("is_deleted", true)
+    .order("deleted_at", { ascending: false });
+
+  const trashList = data || [];
+  const emptyEl = document.getElementById("adminTrashEmptyState");
+  if (emptyEl) emptyEl.hidden = trashList.length > 0;
+
+  const body = document.getElementById("adminTrashTableBody");
+  if (!body) return;
+
+  body.innerHTML = trashList.map((file, idx) => `
+    <tr>
+      <td>${idx + 1}</td>
+      <td><strong>${escapeHTML(file.file_name)}</strong></td>
+      <td>${escapeHTML(file.folder?.display_name || "-")}</td>
+      <td>${escapeHTML(file.user?.user_name || "Người dùng ẩn danh")}</td>
+      <td>${formatDateTime(file.deleted_at)}</td>
+      <td>
+        <div class="actions">
+          <button class="action-btn" onclick="restoreFileFromTrash('${file.id}')" title="Khôi phục">↺</button>
+          <button class="action-btn delete" onclick="hardDeleteFile('${file.id}', '${file.folder?.bucket_name || 'documents'}', '${file.storage_path}')" title="Xóa vĩnh viễn">⌫</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// 3. Khôi phục file từ Thùng rác về danh sách chính
+async function restoreFileFromTrash(id) {
+  await supabaseClient.from("file").update({ is_deleted: false, deleted_at: null }).eq("id", id);
+  showToast("Đã khôi phục tài liệu", "");
+  await loadAdminTrashBin();
+  await loadAllFiles();
+}
+
+// 4. Xóa vĩnh viễn file khỏi CSDL & Storage (Chỉ dành cho Admin)
+async function hardDeleteFile(id, bucket, storagePath) {
+  if (!confirm("CẢNH BÁO: Xóa vĩnh viễn sẽ mất hoàn toàn file và không thể khôi phục. Tiếp tục?")) return;
+  const cleanPath = storagePath.replace(`${bucket}/`, "");
+  await supabaseClient.storage.from(bucket).remove([cleanPath]);
+  await supabaseClient.from("file").delete().eq("id", id);
+  showToast("Đã xóa vĩnh viễn khỏi hệ thống", "");
+  await loadAdminTrashBin();
+}
+
+// 5. Lưu Cấu hình Website (Tên Web, Logo, Số ngày lưu Thùng rác)
+async function saveSiteSettings() {
+  const siteName = document.getElementById("settingSiteName")?.value.trim();
+  const siteLogo = document.getElementById("settingSiteLogo")?.value.trim();
+  const trashDays = parseInt(document.getElementById("settingTrashDays")?.value) || 30;
+
+  const { error } = await supabaseClient.from("site_settings").upsert({
+    id: 1,
+    site_name: siteName,
+    site_logo: siteLogo,
+    trash_retention_days: trashDays
+  });
+
+  if (error) showToast("Lỗi lưu cấu hình", error.message);
+  else showToast("Đã lưu cấu hình hệ thống", "");
+}
 function slugify(t) { return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""); }
 document.getElementById("btnGoToUpload")?.addEventListener("click", () => switchPage("upload"));
 document.addEventListener("click", (e) => { const nav = e.target.closest("[data-page]"); if (nav) switchPage(nav.dataset.page); });
