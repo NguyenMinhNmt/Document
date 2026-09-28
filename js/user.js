@@ -7,6 +7,7 @@ const pageTitles = {
   leaderboard: "Bảng xếp hạng",
   upload: "Upload",
   discussion: "Thảo luận",
+  trash: "Thùng rác của tôi",
   account: "Tài khoản"
 };
 
@@ -80,6 +81,8 @@ async function revalidateTabData(tab) {
     await loadLeaderboard();
   } else if (tab === "upload") {
     await Promise.all([loadFolders(), loadHashtagsList()]);
+  } else if (tab === "trash") {
+    await loadUserTrashBin();
   }
 }
 
@@ -647,15 +650,114 @@ function initThemeToggle(isDark) {
     await supabaseClient.from("user").update({ color: toggle.checked }).eq("id", currentUser.id);
   });
 }
+// User xóa mềm (chuyển vào Thùng rác)
 async function deleteFile(fileId) {
-  if (!confirm("Xóa vĩnh viễn file này?")) return;
-  const file = allFilesData.find(f => f.id === fileId);
-  if (!file) return;
-  const bucket = file.folder?.bucket_name || "documents";
-  await supabaseClient.storage.from(bucket).remove([file.storage_path.replace(`${bucket}/`, "")]);
-  await supabaseClient.from("file").delete().eq("id", fileId);
-  allFilesData = allFilesData.filter(f => f.id !== fileId);
-  localStorage.setItem("cache_files", JSON.stringify(allFilesData));
+  if (!confirm("Bạn có muốn chuyển tài liệu này vào Thùng rác?")) return;
+  const { error } = await supabaseClient
+    .from("file")
+    .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+    .eq("id", fileId);
+
+  if (error) return showToast("Lỗi", error.message);
+  await loadAllFiles();
   renderDocTable();
-  showToast("Đã xóa file", "");
+  showToast("Đã chuyển vào Thùng rác", "");
+}
+
+// Tải danh sách Thùng rác cá nhân của User
+async function loadUserTrashBin() {
+  if (!currentUser) return;
+  const { data } = await supabaseClient
+    .from("file")
+    .select("id, file_name, deleted_at, folder:id_folder(display_name)")
+    .eq("id_user", currentUser.id)
+    .eq("is_deleted", true)
+    .order("deleted_at", { ascending: false });
+
+  const trashList = data || [];
+  const emptyEl = document.getElementById("userTrashEmptyState");
+  if (emptyEl) emptyEl.hidden = trashList.length > 0;
+
+  const body = document.getElementById("userTrashTableBody");
+  if (!body) return;
+
+  body.innerHTML = trashList.map((file, idx) => `
+    <tr>
+      <td>${idx + 1}</td>
+      <td><strong>${escapeHTML(file.file_name)}</strong></td>
+      <td>${escapeHTML(file.folder?.display_name || "-")}</td>
+      <td>${formatDateTime(file.deleted_at)}</td>
+      <td>
+        <button class="action-btn" onclick="restoreUserFile('${file.id}')" title="Khôi phục">↺ Khôi phục</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// User khôi phục file từ Thùng rác (User KHÔNG CÓ NÚT XÓA VĨNH VIỄN)
+async function restoreUserFile(fileId) {
+  await supabaseClient.from("file").update({ is_deleted: false, deleted_at: null }).eq("id", fileId);
+  showToast("Đã khôi phục tài liệu thành công!", "");
+  await loadUserTrashBin();
+  await loadAllFiles();
+}
+/* ==========================================================================
+   BỔ SUNG: CHỨC NĂNG THÙNG RÁC CHO USER (KHÔNG XÓA VĨNH VIỄN)
+   ========================================================================== */
+
+// 1. Chuyển file vào Thùng rác (Xóa mềm)
+async function moveToTrash(fileId) {
+  if (!confirm("Bạn có muốn chuyển tài liệu này vào Thùng rác không?")) return;
+
+  try {
+    const { error } = await supabaseClient
+      .from('file')
+      .update({
+        is_deleted: true,
+        deleted_at: new Date().toISOString()
+      })
+      .eq('id', fileId);
+
+    if (error) throw error;
+    alert("✓ Đã chuyển tài liệu vào Thùng rác.");
+    // Bạn có thể gọi hàm load danh sách file cũ của bạn tại đây để cập nhật UI
+  } catch (err) {
+    alert("❌ Lỗi chuyển vào thùng rác: " + err.message);
+  }
+}
+
+// 2. Lấy danh sách file trong Thùng rác của chính User này
+async function getUserTrashFiles(userId) {
+  try {
+    const { data, error } = await supabaseClient
+      .from('file')
+      .select('*')
+      .eq('id_user', userId)
+      .eq('is_deleted', true)
+      .order('deleted_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error("Lỗi lấy danh sách thùng rác:", err.message);
+    return [];
+  }
+}
+
+// 3. Khôi phục file từ Thùng rác về danh sách chính
+async function restoreUserFile(fileId) {
+  try {
+    const { error } = await supabaseClient
+      .from('file')
+      .update({
+        is_deleted: false,
+        deleted_at: null
+      })
+      .eq('id', fileId);
+
+    if (error) throw error;
+    alert("✓ Khôi phục tài liệu thành công!");
+  } catch (err) {
+    alert("❌ Lỗi khôi phục: " + err.message);
+  }
 }

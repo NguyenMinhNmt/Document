@@ -12,6 +12,7 @@ const pageTitles = {
   history: "Lịch sử",
   discussion: "Thảo luận",
   settings: "Cài đặt",
+  trash: "Thùng rác hệ thống",
   account: "Tài khoản"
 };
 
@@ -104,6 +105,8 @@ async function revalidateTabData(tab) {
     await loadHistory();
   } else if (tab === "settings") {
     await loadSettings();
+  } else if (tab === "trash") {
+    await loadAdminTrashBin();
   }
 }
 
@@ -872,6 +875,7 @@ async function loadSettings() {
 
 document.getElementById("settingsForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
+  await saveSiteSettings(); // Gọi lưu Tên web, Logo & Số ngày thùng rác
   await supabaseClient.from("site_setting").upsert({
     id: 1,
     phone: document.getElementById("settingPhone").value.trim(),
@@ -879,7 +883,7 @@ document.getElementById("settingsForm")?.addEventListener("submit", async (e) =>
     facebook: document.getElementById("settingFacebook").value.trim(),
     updated_at: new Date().toISOString()
   });
-  showToast("Đã lưu cài đặt", "");
+  showToast("Đã lưu tất cả cài đặt", "");
 });
 
 document.getElementById("accountForm")?.addEventListener("submit", async (e) => {
@@ -908,7 +912,86 @@ async function toggleFileStatus(id) {
   showToast("Đã cập nhật trạng thái", "");
 }
 
+as// Chuyển file thành xóa mềm (vào Thùng rác)
 async function purgeFile(id) {
+  if (!confirm("Bạn có chắc muốn chuyển tài liệu này vào Thùng rác?")) return;
+  const { error } = await supabaseClient
+    .from("file")
+    .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) return showToast("Lỗi", error.message);
+  await loadAllFiles();
+  renderFileTable();
+  showToast("Đã chuyển vào Thùng rác", "");
+}
+
+// Tải danh sách Thùng rác cho Admin
+async function loadAdminTrashBin() {
+  const { data } = await supabaseClient
+    .from("file")
+    .select("id, file_name, storage_path, deleted_at, id_user, folder:id_folder(display_name, bucket_name), user:id_user(user_name)")
+    .eq("is_deleted", true)
+    .order("deleted_at", { ascending: false });
+
+  const trashList = data || [];
+  const emptyEl = document.getElementById("adminTrashEmptyState");
+  if (emptyEl) emptyEl.hidden = trashList.length > 0;
+
+  const body = document.getElementById("adminTrashTableBody");
+  if (!body) return;
+
+  body.innerHTML = trashList.map((file, idx) => `
+    <tr>
+      <td>${idx + 1}</td>
+      <td><strong>${escapeHTML(file.file_name)}</strong></td>
+      <td>${escapeHTML(file.folder?.display_name || "-")}</td>
+      <td>${escapeHTML(file.user?.user_name || "Người dùng ẩn danh")}</td>
+      <td>${formatDateTime(file.deleted_at)}</td>
+      <td>
+        <div class="actions">
+          <button class="action-btn" onclick="restoreFileFromTrash('${file.id}')" title="Khôi phục">↺</button>
+          <button class="action-btn delete" onclick="hardDeleteFile('${file.id}', '${file.folder?.bucket_name || 'documents'}', '${file.storage_path}')" title="Xóa vĩnh viễn">⌫</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// Khôi phục file
+async function restoreFileFromTrash(id) {
+  await supabaseClient.from("file").update({ is_deleted: false, deleted_at: null }).eq("id", id);
+  showToast("Đã khôi phục tài liệu", "");
+  await loadAdminTrashBin();
+  await loadAllFiles();
+}
+
+// Xóa vĩnh viễn file khỏi CSDL & Storage (Chỉ Admin)
+async function hardDeleteFile(id, bucket, storagePath) {
+  if (!confirm("CẢNH BÁO: Xóa vĩnh viễn sẽ mất hoàn toàn file và không thể khôi phục. Tiếp tục?")) return;
+  const cleanPath = storagePath.replace(`${bucket}/`, "");
+  await supabaseClient.storage.from(bucket).remove([cleanPath]);
+  await supabaseClient.from("file").delete().eq("id", id);
+  showToast("Đã xóa vĩnh viễn khỏi hệ thống", "");
+  await loadAdminTrashBin();
+}
+
+// Lưu Tên Web, Logo & Số ngày giữ thùng rác (Bảng site_settings)
+async function saveSiteSettings() {
+  const siteName = document.getElementById("settingSiteName")?.value.trim();
+  const siteLogo = document.getElementById("settingSiteLogo")?.value.trim();
+  const trashDays = parseInt(document.getElementById("settingTrashDays")?.value) || 30;
+
+  const { error } = await supabaseClient.from("site_settings").upsert({
+    id: 1,
+    site_name: siteName,
+    site_logo: siteLogo,
+    trash_retention_days: trashDays
+  });
+
+  if (error) showToast("Lỗi lưu cấu hình", error.message);
+  else showToast("Đã lưu cấu hình hệ thống", "");
+}ync function purgeFile(id) {
   if (!confirm("Xóa vĩnh viễn file này?")) return;
   const file = allFilesData.find(f => f.id === id);
   if (!file) return;
@@ -967,4 +1050,74 @@ function initThemeToggle(isDark) {
     document.documentElement.dataset.theme = toggle.checked ? "dark" : "light";
     await supabaseClient.from("user").update({ color: toggle.checked }).eq("id", currentUser.id);
   });
+}
+/* ==========================================================================
+   BỔ SUNG: CÀI ĐẶT HỆ THỐNG & THÙNG RÁC CHO ADMIN
+   ========================================================================== */
+
+// 1. Lưu Cài đặt Website (Tên web, Logo, Số ngày lưu thùng rác)
+async function saveSiteSettings() {
+  const nameInput = document.getElementById('settingSiteName')?.value.trim();
+  const logoInput = document.getElementById('settingSiteLogo')?.value.trim();
+  const trashDaysInput = parseInt(document.getElementById('settingTrashDays')?.value) || 30;
+
+  try {
+    const { error } = await supabaseClient
+      .from('site_settings')
+      .upsert({
+        id: 1,
+        site_name: nameInput,
+        site_logo: logoInput,
+        trash_retention_days: trashDaysInput
+      });
+
+    if (error) throw error;
+    alert("✓ Đã lưu cài đặt hệ thống thành công!");
+    window.location.reload();
+  } catch (err) {
+    alert("❌ Lỗi lưu cài đặt: " + err.message);
+  }
+}
+
+// 2. Admin lấy toàn bộ danh sách file trong Thùng rác hệ thống
+async function adminGetTrashBinFiles() {
+  try {
+    const { data, error } = await supabaseClient
+      .from('file')
+      .select('*, user(user_name)')
+      .eq('is_deleted', true)
+      .order('deleted_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error("Lỗi lấy danh sách thùng rác Admin:", err.message);
+    return [];
+  }
+}
+
+// 3. Admin XÓA VĨNH VIỄN file khỏi hệ thống (Dành riêng cho Admin)
+async function adminPermanentDelete(fileId, storagePath) {
+  if (!confirm("⚠️ CẢNH BÁO: Bạn có chắc chắn muốn XÓA VĨNH VIỄN tài liệu này? Thao tác này KHÔNG THỂ HOÀN TÁC!")) {
+    return;
+  }
+
+  try {
+    // Xóa file trong Storage nếu có đường dẫn
+    if (storagePath) {
+      await supabaseClient.storage.from('documents').remove([storagePath]);
+    }
+
+    // Xóa bản ghi trong Database
+    const { error: dbErr } = await supabaseClient
+      .from('file')
+      .delete()
+      .eq('id', fileId);
+
+    if (dbErr) throw dbErr;
+
+    alert("✓ Đã xóa vĩnh viễn tài liệu khỏi hệ thống!");
+  } catch (err) {
+    alert("❌ Lỗi khi xóa vĩnh viễn: " + err.message);
+  }
 }

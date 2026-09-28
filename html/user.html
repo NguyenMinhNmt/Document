@@ -33,6 +33,7 @@
         <button class="nav-item" data-page="leaderboard"><span class="nav-icon">🏆</span> Bảng xếp hạng</button>
         <button class="nav-item" data-page="upload"><span class="nav-icon">⬆</span> Upload</button>
         <button class="nav-item" data-page="discussion"><span class="nav-icon">💬</span> Thảo luận</button>
+        <button class="nav-item" data-page="trash"><span class="nav-icon">🗑</span> Thùng rác của tôi</button>
         <button class="nav-item" data-page="account"><span class="nav-icon">⚙</span> Tài khoản</button>
       </nav>
 
@@ -225,7 +226,36 @@
           </div>
           <div id="commentRoot"></div>
         </section>
+        <!-- ================= TAB: THÙNG RÁC CỦA TÔI ================= -->
+        <section class="page" id="trashPage">
+          <div class="page-heading">
+            <div>
+              <h1>Thùng rác của tôi</h1>
+              <p>File ở đây chỉ có bạn thấy. Bạn có thể khôi phục bất cứ lúc nào trước khi hết hạn tự động xóa</p>
+            </div>
+          </div>
 
+          <section class="card">
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>STT</th>
+                    <th>Tên tài liệu</th>
+                    <th>Folder</th>
+                    <th>Thời gian xóa</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="userTrashTableBody"></tbody>
+              </table>
+            </div>
+            <div class="empty-state" id="userTrashEmptyState" hidden>
+              <div>🗑</div>
+              <h3>Thùng rác của bạn trống</h3>
+            </div>
+          </section>
+        </section>
         <!-- ================= TAB: TÀI KHOẢN ================= -->
         <section class="page" id="accountPage">
           <div class="page-heading">

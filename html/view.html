@@ -4,88 +4,99 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Xem Tài Liệu</title>
+  <title>Xem Chi Tiết Tài Liệu - Web Tài Liệu</title>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
     rel="stylesheet">
   <style>
+    /* Style chuẩn theo giao diện Dark Mode xem file trong ảnh bạn gửi */
     body {
       font-family: 'Be Vietnam Pro', sans-serif;
-      background: #1E293B;
-      color: #fff;
+      background-color: #121827;
+      color: #F3F4F6;
       margin: 0;
       padding: 2rem;
       display: flex;
       gap: 2rem;
+      min-height: 100vh;
+      box-sizing: border-box;
     }
 
     .preview-box {
       flex: 2;
-      background: #fff;
-      border-radius: 8px;
+      background: #FFFFFF;
+      border-radius: 12px;
       min-height: 80vh;
       color: #000;
       padding: 1rem;
       display: flex;
       align-items: center;
       justify-content: center;
+      overflow: hidden;
     }
 
     .info-box {
       flex: 1;
+      background: #1F2937;
+      padding: 2rem;
+      border-radius: 12px;
       display: flex;
       flex-direction: column;
       gap: 1.5rem;
+      height: fit-content;
     }
 
     .info-label {
-      font-size: 0.8rem;
-      color: #94A3B8;
+      font-size: 0.75rem;
+      color: #9CA3AF;
       text-transform: uppercase;
       font-weight: 700;
+      letter-spacing: 1px;
       margin-bottom: 0.25rem;
     }
 
     .info-val {
       font-size: 1.1rem;
       font-weight: 600;
+      color: #F9FAFB;
+      word-break: break-word;
     }
 
     .btn-download {
-      background: #60A5FA;
-      color: #fff;
+      background: #3B82F6;
+      color: #FFFFFF;
       padding: 1rem;
       border: none;
       border-radius: 8px;
       font-size: 1.1rem;
-      font-weight: bold;
+      font-weight: 700;
       cursor: pointer;
       text-align: center;
-      margin-top: auto;
       text-decoration: none;
       display: block;
+      transition: background 0.2s;
+      margin-top: 1rem;
     }
 
     .btn-download:hover {
-      background: #3B82F6;
+      background: #2563EB;
     }
 
-    .hashtag {
-      background: #334155;
-      padding: 0.25rem 0.75rem;
-      border-radius: 4px;
-      font-size: 0.85rem;
-      display: inline-block;
+    @media (max-width: 868px) {
+      body {
+        flex-direction: column;
+      }
     }
   </style>
 </head>
 
 <body>
 
+  <!-- KHUNG HIỂN THỊ PREVIEW FILE (DOCX / PDF / IMAGE) -->
   <div class="preview-box">
-    <!-- Khu vực iframe render DOCX/PDF -->
-    <p id="previewMessage">Đang tải bản xem trước...</p>
+    <p id="previewStatus" style="color: #6B7280; font-weight: 500;">⏳ Đang tải tài liệu...</p>
   </div>
 
+  <!-- KHUNG HIỂN THỊ THÔNG TIN CHI TIẾT FILE -->
   <div class="info-box">
     <div>
       <div class="info-label">TÊN TÀI LIỆU</div>
@@ -100,48 +111,70 @@
       <div class="info-val" id="docDate">---</div>
     </div>
     <div>
-      <div class="info-label">MÔ TẢ</div>
-      <div class="info-val" id="docDesc" style="font-weight: 400; font-size: 0.95rem;">---</div>
+      <div class="info-label">MÔ TẢ TÀI LIỆU</div>
+      <div class="info-val" id="docDesc" style="font-weight: 400; font-size: 0.95rem; color: #D1D5DB;">---</div>
     </div>
 
-    <a href="#" class="btn-download" id="btnDownload">⬇ Tải tài liệu về</a>
+    <a href="#" class="btn-download" id="btnDownload" target="_blank">⬇ Tải tài liệu về</a>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/config.js"></script>
   <script>
-    // Hàm tải dữ liệu Public
+    /**
+     * HÀM XỬ LÝ PUBLIC VIEW: Tải thông tin file công khai qua URL (view.html?id=FILE_ID)
+     * Không bắt buộc đăng nhập. Nếu user đăng bị xóa, tự chuyển tên thành "Người dùng ẩn danh".
+     */
     async function loadPublicDocument() {
       const urlParams = new URLSearchParams(window.location.search);
       const fileId = urlParams.get('id');
-      if (!fileId) return document.getElementById('previewMessage').textContent = "Không tìm thấy file!";
+
+      if (!fileId) {
+        document.getElementById('previewStatus').textContent = "❌ Đường dẫn không hợp lệ (Missing ID).";
+        return;
+      }
 
       try {
-        // Giả sử bảng tên là 'file' và JOIN với 'user'. Cần sửa tên bảng cho đúng với dự án của bạn
-        const { data, error } = await supabaseClient
+        // Tra cứu thông tin file và thông tin user đăng
+        const { data: fileData, error } = await supabaseClient
           .from('file')
           .select('*, user(user_name)')
           .eq('id', fileId)
           .single();
 
-        if (error || !data) throw new Error();
+        if (error || !fileData || fileData.is_deleted) {
+          throw new Error("Tài liệu này không tồn tại hoặc đã bị chuyển vào Thùng rác.");
+        }
 
-        document.getElementById('docName').textContent = data.file_name || "Tài liệu";
-        // Nếu id_user bị NULL (do bị xóa) thì lấy tên "Người dùng ẩn danh"
-        document.getElementById('docUploader').textContent = data.user?.user_name || "Người dùng ẩn danh";
-        document.getElementById('docDate').textContent = new Date(data.created_at).toLocaleString('vi-VN');
-        document.getElementById('docDesc').textContent = data.description || "Không có mô tả.";
+        // Điền dữ liệu vào giao diện
+        document.getElementById('docName').textContent = fileData.file_name || "Tài liệu không tên";
 
-        // Lấy link tải Public từ Storage (Giả sử bucket tên là 'documents')
-        const { data: pubUrl } = supabaseClient.storage.from('documents').getPublicUrl(data.file_path);
-        document.getElementById('btnDownload').href = pubUrl.publicUrl;
-        document.getElementById('previewMessage').innerHTML = `<iframe src="${pubUrl.publicUrl}" width="100%" height="600px" style="border:none;"></iframe>`;
+        // SỬA LỖI 500: Nếu id_user = NULL (do bị xóa user), tự động hiển thị "Người dùng ẩn danh"
+        document.getElementById('docUploader').textContent = fileData.user?.user_name || "Người dùng ẩn danh";
+        document.getElementById('docDate').textContent = new Date(fileData.created_at).toLocaleString('vi-VN');
+        document.getElementById('docDesc').textContent = fileData.bio || fileData.description || "Không có mô tả.";
+
+        // Lấy đường dẫn tải file công khai từ Supabase Storage
+        const storagePath = fileData.storage_path;
+        const { data: publicUrlData } = supabaseClient.storage.from('documents').getPublicUrl(storagePath);
+        const downloadUrl = publicUrlData.publicUrl;
+
+        document.getElementById('btnDownload').href = downloadUrl;
+
+        // Render xem trước nếu là file PDF hoặc ảnh
+        const ext = fileData.file_name?.split('.').pop()?.toLowerCase();
+        if (ext === 'pdf' || ['png', 'jpg', 'jpeg'].includes(ext)) {
+          document.getElementById('previewStatus').parentElement.innerHTML = `<iframe src="${downloadUrl}" width="100%" height="100%" style="border:none; border-radius:8px;"></iframe>`;
+        } else {
+          document.getElementById('previewStatus').innerHTML = `📄 Đang xem file .${ext?.toUpperCase()}. Bấm <strong>"Tải tài liệu về"</strong> ở bên phải để tải xuống.`;
+        }
 
       } catch (err) {
-        document.getElementById('previewMessage').textContent = "Tài liệu này không tồn tại hoặc đã bị xóa vào thùng rác.";
+        document.getElementById('previewStatus').textContent = `❌ ${err.message}`;
       }
     }
-    loadPublicDocument();
+
+    document.addEventListener("DOMContentLoaded", loadPublicDocument);
   </script>
 </body>
 
