@@ -1,5 +1,5 @@
 /* ==========================================================================
-   AUTH.JS - Hệ thống Xác thực OTP & Đăng nhập Username/Email Hoàn Chỉnh
+   AUTH.JS - Tự quản lý mã OTP 6 số chính xác & Đăng nhập Username/Email
    ========================================================================== */
 
 let currentAuthMode = "LOGIN";
@@ -188,9 +188,9 @@ formRegister?.addEventListener("submit", async (e) => {
   }
 });
 
-/* ================= 3. HÀM TẠO MÃ OTP VÀ GỬI MAIL ================= */
+/* ================= 3. HÀM TẠO MÃ OTP ĐỒNG BỘ NỘI DUNG ================= */
 async function sendOtpCode(email) {
-  // Tạo mã OTP 6 số ngẫu nhiên
+  // Tạo mã OTP 6 số ngẫu nhiên chuẩn
   const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAt = new Date(Date.now() + 3 * 60 * 1000).toISOString();
 
@@ -204,14 +204,20 @@ async function sendOtpCode(email) {
 
   if (dbErr) throw dbErr;
 
-  // 2. Kích hoạt Supabase gửi Email OTP
-  await supabaseClient.auth.signInWithOtp({ email: email });
+  // 2. Kích hoạt Supabase gửi mail OTP chuẩn
+  await supabaseClient.auth.signInWithOtp({
+    email: email,
+    options: {
+      shouldCreateUser: false
+    }
+  });
 
   currentOtpEmail = email;
   document.getElementById("otpTargetEmail").textContent = email;
 
-  // Hiển thị thông báo mã OTP lên giao diện Toast
-  showToast("MÃ OTP CỦA BẠN", `Mã xác thực 6 số là: ${otpCode}`);
+  // Xóa sạch 6 ô nhập OTP cũ
+  document.querySelectorAll(".otp-digit").forEach(i => i.value = "");
+  document.querySelectorAll(".otp-digit")[0]?.focus();
 
   switchAuthMode("OTP");
   startOtpTimer();
