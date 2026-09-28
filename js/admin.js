@@ -912,7 +912,7 @@ async function toggleFileStatus(id) {
   showToast("Đã cập nhật trạng thái", "");
 }
 
-as// Chuyển file thành xóa mềm (vào Thùng rác)
+// Chuyển file thành xóa mềm (vào Thùng rác)
 async function purgeFile(id) {
   if (!confirm("Bạn có chắc muốn chuyển tài liệu này vào Thùng rác?")) return;
   const { error } = await supabaseClient
