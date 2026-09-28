@@ -16,23 +16,6 @@
       margin: 3rem auto;
       padding: 2rem;
     }
-
-    .otp-inputs {
-      display: flex;
-      gap: 0.5rem;
-      justify-content: center;
-      margin: 1rem 0;
-    }
-
-    .otp-inputs input {
-      width: 45px;
-      height: 50px;
-      text-align: center;
-      font-size: 1.25rem;
-      font-weight: 700;
-      border-radius: 8px;
-      border: 1px solid var(--border-color);
-    }
   </style>
 </head>
 
@@ -67,7 +50,7 @@
           style="width: 100%; justify-content: center;">Đăng nhập</button>
       </form>
 
-      <!-- FORM ĐĂNG KÝ / QUÊN MK -->
+      <!-- FORM ĐĂNG KÝ -->
       <form id="registerForm" hidden>
         <div class="form-field" id="fieldRegName" style="margin-bottom: 1rem;">
           <label for="regName">Tên hiển thị (Username)</label>
@@ -89,18 +72,17 @@
           style="width: 100%; justify-content: center;">Tiếp tục (Nhận mã OTP)</button>
       </form>
 
-      <!-- FORM XÁC THỰC MÃ OTP (6 CHỮ SỐ) -->
+      <!-- FORM XÁC THỰC MÃ OTP (1 Ô NHẬP DUY NHẤT) -->
       <form id="otpForm" hidden>
-        <p style="text-align: center; font-size: 0.9rem;">Mã OTP 6 số đã được gửi tới email:<br><strong
+        <p style="text-align: center; font-size: 0.9rem;">Mã OTP đã được gửi tới email:<br><strong
             id="otpTargetEmail">---</strong></p>
-        <div class="otp-inputs">
-          <input class="form-control otp-digit" type="text" maxlength="1" required autofocus>
-          <input class="form-control otp-digit" type="text" maxlength="1" required>
-          <input class="form-control otp-digit" type="text" maxlength="1" required>
-          <input class="form-control otp-digit" type="text" maxlength="1" required>
-          <input class="form-control otp-digit" type="text" maxlength="1" required>
-          <input class="form-control otp-digit" type="text" maxlength="1" required>
+
+        <div style="margin: 1.5rem 0;">
+          <input class="form-control" type="text" id="otpSingleInput" required autofocus
+            placeholder="Nhập mã OTP tại đây"
+            style="width: 100%; height: 55px; text-align: center; font-size: 1.5rem; font-weight: 700; letter-spacing: 5px; border-radius: 8px;">
         </div>
+
         <div style="text-align: center; margin-bottom: 1rem; font-size:0.8rem; color:var(--text-sub);">
           <span id="otpTimerLabel">Gửi lại mã sau 60s</span>
           <button type="button" id="btnResendOtp" class="button button-secondary"

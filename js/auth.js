@@ -1,5 +1,5 @@
 /* ==========================================================================
-   AUTH.JS - Đồng bộ tuyệt đối 100% với OTP Native của Supabase Auth
+   AUTH.JS - Xác thực OTP Linh Hoạt Độ Dài (Supabase Auth Native)
    ========================================================================== */
 
 let currentAuthMode = "LOGIN";
@@ -48,7 +48,7 @@ function switchAuthMode(mode) {
     document.getElementById("regSubmitBtn").textContent = "Gửi mã OTP khôi phục";
   } else if (mode === "OTP") {
     elTitle.textContent = "Xác thực mã OTP";
-    elSubTitle.textContent = "Nhập 6 chữ số vừa được gửi đến Email";
+    elSubTitle.textContent = "Nhập mã xác thực vừa được gửi đến Email của bạn";
     formOtp.hidden = false;
   } else if (mode === "RESET_PASSWORD") {
     elTitle.textContent = "Đặt lại mật khẩu mới";
@@ -126,7 +126,6 @@ formRegister?.addEventListener("submit", async (e) => {
       }
       tempRegisterData = { name: regName, email: email, password: regPass };
     } else {
-      // QUÊN MK
       const existingUser = existingUsers?.find(u => u.email?.toLowerCase() === email.toLowerCase());
       if (!existingUser) throw new Error("Email chưa từng đăng ký tài khoản.");
       if (!existingUser.status) throw new Error("Tài khoản chưa duyệt, không thể khôi phục mật khẩu.");
@@ -153,7 +152,6 @@ async function sendOtpCode(email) {
       password: tempRegisterData.password
     });
 
-    // Nếu User đã kẹt trong Auth mà chưa verify, ta cho gửi lại mã
     if (error && error.message.includes("already registered")) {
       const { error: resendErr } = await supabaseClient.auth.resend({ type: 'signup', email: email });
       if (resendErr) errorObj = new Error("Tài khoản bị kẹt. Vui lòng vào Supabase -> Auth -> Users để xóa Email này và thử lại!");
@@ -170,8 +168,12 @@ async function sendOtpCode(email) {
   currentOtpEmail = email;
   document.getElementById("otpTargetEmail").textContent = email;
 
-  document.querySelectorAll(".otp-digit").forEach(i => i.value = "");
-  document.querySelectorAll(".otp-digit")[0]?.focus();
+  // Làm sạch ô nhập
+  const otpInput = document.getElementById("otpSingleInput");
+  if (otpInput) {
+    otpInput.value = "";
+    otpInput.focus();
+  }
 
   switchAuthMode("OTP");
   startOtpTimer();
@@ -198,19 +200,20 @@ document.getElementById("btnResendOtp")?.addEventListener("click", async () => {
   }
 });
 
-/* ================= 4. XÁC THỰC MÃ VỚI SUPABASE AUTH ================= */
+/* ================= 4. XÁC THỰC MÃ LINH HOẠT VỚI SUPABASE AUTH ================= */
 formOtp?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const digits = Array.from(document.querySelectorAll(".otp-digit")).map(i => i.value).join("");
+
+  // Đọc mã từ 1 ô duy nhất
+  const digits = document.getElementById("otpSingleInput").value.trim();
   const btn = document.getElementById("otpSubmitBtn");
 
-  if (digits.length < 6) return showToast("Lỗi", "Vui lòng nhập đủ 6 số.");
+  if (!digits) return showToast("Lỗi", "Vui lòng nhập mã OTP.");
 
   btn.disabled = true;
   btn.textContent = "⏳ Đang xác minh...";
 
   try {
-    // LOẠI TOKEN CỰC KỲ QUAN TRỌNG ĐỂ XÁC THỰC ĐÚNG
     const authType = currentAuthMode === "REGISTER" ? "signup" : "recovery";
 
     const { data: verifyData, error: verifyErr } = await supabaseClient.auth.verifyOtp({
@@ -222,7 +225,6 @@ formOtp?.addEventListener("submit", async (e) => {
     if (verifyErr) throw new Error("Mã OTP không chính xác hoặc đã hết hạn!");
 
     if (currentAuthMode === "REGISTER") {
-      // Xác thực thành công -> Lưu vào bảng User
       await supabaseClient.from("user").upsert({
         id: verifyData.user.id,
         user_name: tempRegisterData.name,
@@ -269,16 +271,6 @@ formResetPassword?.addEventListener("submit", async (e) => {
 });
 
 /* ================= TIỆN ÍCH UI ================= */
-const otpInputs = document.querySelectorAll(".otp-digit");
-otpInputs.forEach((input, idx) => {
-  input.addEventListener("input", (e) => {
-    if (e.target.value.length === 1 && idx < otpInputs.length - 1) otpInputs[idx + 1].focus();
-  });
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Backspace" && !e.target.value && idx > 0) otpInputs[idx - 1].focus();
-  });
-});
-
 function startOtpTimer() {
   let timer = 60;
   const label = document.getElementById("otpTimerLabel");
