@@ -1062,3 +1062,110 @@ async function toggleFileStatus(id) {
     alert("❌ Lỗi hệ thống: " + err.message);
   }
 }
+// -------------------------------------------------------------------------
+// LOGIC SỬA FOLDER & HASHTAG
+// -------------------------------------------------------------------------
+
+// --- 1. Sửa Folder ---
+function openEditFolderModal(id) {
+  const folder = allFoldersData.find(f => f.id === id);
+  if (!folder) return;
+  document.getElementById("editFolderId").value = folder.id;
+  document.getElementById("editFolderInputName").value = folder.display_name;
+  document.getElementById("editFolderModal").style.display = "flex";
+}
+
+document.querySelectorAll("[data-close-folder-modal]").forEach(el => {
+  el.addEventListener("click", () => {
+    document.getElementById("editFolderModal").style.display = "none";
+  });
+});
+
+document.getElementById("editFolderForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = document.getElementById("editFolderId").value;
+  const newName = document.getElementById("editFolderInputName").value.trim();
+  const submitBtn = document.getElementById("editFolderSubmitBtn");
+
+  if (!newName) return showToast("Lỗi", "Vui lòng nhập tên mới.");
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "⏳ Đang lưu...";
+
+  try {
+    const newBucketName = slugify(newName);
+    const { error } = await supabaseClient
+      .from("folder")
+      .update({ display_name: newName, bucket_name: newBucketName })
+      .eq("id", id);
+
+    if (error) throw error;
+
+    allFoldersData = allFoldersData.map(f => f.id === id ? { ...f, display_name: newName, bucket_name: newBucketName } : f);
+    localStorage.setItem("cache_folders", JSON.stringify(allFoldersData));
+    renderFolderManageList();
+    populateFilterDropdowns();
+
+    showToast("Thành công", "Đã cập nhật tên Folder.");
+    document.getElementById("editFolderModal").style.display = "none";
+    await loadAllFiles();
+    renderFileTable();
+  } catch (err) {
+    alert("❌ Lỗi cập nhật Folder: " + err.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Lưu thay đổi";
+  }
+});
+
+// --- 2. Sửa Hashtag ---
+function openEditHashtagModal(id) {
+  const hashtag = allHashtagsData.find(h => h.id === id);
+  if (!hashtag) return;
+  document.getElementById("editHashtagId").value = hashtag.id;
+  document.getElementById("editHashtagInputName").value = hashtag.name;
+  document.getElementById("editHashtagModal").style.display = "flex";
+}
+
+document.querySelectorAll("[data-close-hashtag-modal]").forEach(el => {
+  el.addEventListener("click", () => {
+    document.getElementById("editHashtagModal").style.display = "none";
+  });
+});
+
+document.getElementById("editHashtagForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = document.getElementById("editHashtagId").value;
+  const newName = document.getElementById("editHashtagInputName").value.trim().replace(/^#/, "");
+  const submitBtn = document.getElementById("editHashtagSubmitBtn");
+
+  if (!newName) return showToast("Lỗi", "Vui lòng nhập tên mới.");
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "⏳ Đang lưu...";
+
+  try {
+    const { error } = await supabaseClient
+      .from("hashtag")
+      .update({ name: newName })
+      .eq("id", id);
+
+    if (error) throw error;
+
+    allHashtagsData = allHashtagsData.map(h => h.id === id ? { ...h, name: newName } : h);
+    localStorage.setItem("cache_hashtags", JSON.stringify(allHashtagsData));
+    renderHashtagManageList();
+    renderAvailableTagsSelect();
+    renderHashtagFilterContainer();
+
+    showToast("Thành công", "Đã cập nhật tên Hashtag.");
+    document.getElementById("editHashtagModal").style.display = "none";
+    await loadAllFiles();
+    renderFileTable();
+  } catch (err) {
+    alert("❌ Lỗi cập nhật Hashtag: " + err.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Lưu thay đổi";
+  }
+});
