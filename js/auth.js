@@ -388,3 +388,15 @@ function showToast(title, message) {
     alert(`${title}: ${message}`);
   }
 }
+function togglePasswordVisibility(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+
+  if (input.type === "password") {
+    input.type = "text";
+    btn.textContent = "🙈"; // Chuyển biểu tượng sang che mắt khi đang hiện mật khẩu
+  } else {
+    input.type = "password";
+    btn.textContent = "👁️"; // Chuyển biểu tượng lại mở mắt khi đang ẩn mật khẩu
+  }
+}

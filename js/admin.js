@@ -899,7 +899,6 @@ document.getElementById("accountForm")?.addEventListener("submit", async (e) => 
   e.preventDefault();
   const name = document.getElementById("accountNewName").value.trim();
   const avatarUrlInput = document.getElementById("accountAvatarUrl")?.value.trim();
-  const avatarFileInput = document.getElementById("accountAvatarFile")?.files[0];
   const pass = document.getElementById("accountNewPassword").value;
   const confirmPass = document.getElementById("accountConfirmPassword")?.value;
   const currPass = document.getElementById("accountCurrentPassword").value;
@@ -920,62 +919,41 @@ document.getElementById("accountForm")?.addEventListener("submit", async (e) => 
     });
     if (authError) throw new Error("Mật khẩu hiện tại không đúng.");
 
-    let finalAvatarUrl = avatarUrlInput || null;
-
-    // 2. Tải ảnh lên Storage nếu người dùng chọn file từ máy
-    if (avatarFileInput) {
-      const safeExt = avatarFileInput.name.split('.').pop();
-      const fileName = `avatars/${currentUser.id}_${Date.now()}.${safeExt}`;
-
-      const { error: uploadError } = await supabaseClient.storage
-        .from("documents")
-        .upload(fileName, avatarFileInput, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data: publicUrlData } = supabaseClient.storage
-        .from("documents")
-        .getPublicUrl(fileName);
-
-      finalAvatarUrl = publicUrlData.publicUrl;
-    }
-
-    // 3. Chuẩn bị dữ liệu cập nhật
+    // 2. Chuẩn bị payload cập nhật vào Database
     const updatePayload = {};
     if (name) updatePayload.user_name = name;
-    if (finalAvatarUrl !== null && finalAvatarUrl !== "") {
-      updatePayload.avatar_url = finalAvatarUrl;
+    if (avatarUrlInput !== undefined && avatarUrlInput !== "") {
+      updatePayload.avatar_url = avatarUrlInput;
     }
 
-    // 4. Gửi lệnh Cập nhật xuống Database và BẮT BẮT LỖI
+    // 3. Cập nhật bảng user
     if (Object.keys(updatePayload).length > 0) {
       const { data, error: dbError } = await supabaseClient
         .from("user")
         .update(updatePayload)
         .eq("id", currentUser.id)
-        .select(); // Thêm .select() để kiểm tra kết quả trả về từ DB
+        .select();
 
       if (dbError) throw dbError;
-
-      // Nếu DB không trả về dữ liệu nghĩa là RLS đã chặn lệnh UPDATE ngầm
       if (!data || data.length === 0) {
-        throw new Error("Không thể cập nhật CSDL. Quyền RLS đang khóa cột avatar_url.");
+        throw new Error("Không thể cập nhật CSDL. Vui lòng kiểm tra quyền RLS.");
       }
     }
 
-    // 5. Đổi mật khẩu tài khoản nếu có nhập
+    // 4. Đổi mật khẩu tài khoản nếu có nhập
     if (pass) {
       const { error: passError } = await supabaseClient.auth.updateUser({ password: pass });
       if (passError) throw passError;
     }
 
+    // 5. Đồng bộ giao diện
     if (name) {
       currentUser.name = name;
       if (elUserNameLabel) elUserNameLabel.textContent = name;
     }
 
-    if (finalAvatarUrl) {
-      currentUser.avatar_url = finalAvatarUrl;
+    if (avatarUrlInput) {
+      currentUser.avatar_url = avatarUrlInput;
     }
 
     renderAvatarUI(currentUser.avatar_url, currentUser.name);
@@ -990,7 +968,6 @@ document.getElementById("accountForm")?.addEventListener("submit", async (e) => 
     submitBtn.textContent = "✓ Cập nhật tài khoản";
   }
 });
-
 // -------------------------------------------------------------------------
 // TÍNH NĂNG THÙNG RÁC CHO ADMIN
 // -------------------------------------------------------------------------
@@ -1259,5 +1236,17 @@ function renderAvatarUI(avatarUrl, userName) {
     elUserAvatar.innerHTML = `<img src="${escapeHTML(avatarUrl)}" alt="Avatar" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
   } else {
     elUserAvatar.textContent = (userName || "U").slice(0, 2).toUpperCase();
+  }
+}
+function togglePasswordVisibility(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+
+  if (input.type === "password") {
+    input.type = "text";
+    btn.textContent = "🙈"; // Chuyển biểu tượng sang che mắt khi đang hiện mật khẩu
+  } else {
+    input.type = "password";
+    btn.textContent = "👁️"; // Chuyển biểu tượng lại mở mắt khi đang ẩn mật khẩu
   }
 }
