@@ -42,7 +42,7 @@ async function bootstrapAdminPage() {
 
   const { data: profile } = await supabaseClient
     .from("user")
-    .select("user_name, status, is_admin, is_super_admin, color")
+    .select("user_name, status, is_admin, is_super_admin, color, avatar_url")
     .eq("id", session.user.id)
     .single();
 
@@ -1169,3 +1169,13 @@ document.getElementById("editHashtagForm")?.addEventListener("submit", async (e)
     submitBtn.textContent = "Lưu thay đổi";
   }
 });
+function renderAvatarUI(avatarUrl, userName) {
+  const elUserAvatar = document.getElementById("userAvatar");
+  if (!elUserAvatar) return;
+
+  if (avatarUrl && (avatarUrl.startsWith("http://") || avatarUrl.startsWith("https://"))) {
+    elUserAvatar.innerHTML = `<img src="${escapeHTML(avatarUrl)}" alt="Avatar" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
+  } else {
+    elUserAvatar.textContent = (userName || "U").slice(0, 2).toUpperCase();
+  }
+}

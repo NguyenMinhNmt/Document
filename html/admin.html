@@ -448,15 +448,39 @@
           </div>
           <section class="card">
             <form id="accountForm" class="form-grid single" style="padding:1.5rem;">
-              <div class="form-field"><label>Tên hiển thị mới</label><input class="form-control" type="text"
-                  id="accountNewName"></div>
-              <div class="form-field"><label>Mật khẩu mới</label><input class="form-control" type="password"
-                  id="accountNewPassword"></div>
-              <div class="form-field"><label>Nhập lại mật khẩu mới</label><input class="form-control" type="password"
-                  id="accountConfirmPassword"></div>
-              <div class="form-field"><label>Mật khẩu HIỆN TẠI</label><input class="form-control" type="password"
-                  id="accountCurrentPassword" required></div>
-              <button type="submit" class="button button-primary" id="accountSubmitBtn">✓ Cập nhật</button>
+              <div class="form-field">
+                <label>Tên hiển thị mới</label>
+                <input class="form-control" type="text" id="accountNewName">
+              </div>
+
+              <!-- THÊM Ô CẬP NHẬT AVATAR -->
+              <div class="form-field">
+                <label>Link Avatar (URL ảnh online)</label>
+                <input class="form-control" type="url" id="accountAvatarUrl"
+                  placeholder="https://example.com/avatar.png">
+              </div>
+
+              <div class="form-field">
+                <label>Hoặc Upload file Avatar từ máy tính</label>
+                <input class="form-control" type="file" id="accountAvatarFile" accept="image/*">
+              </div>
+
+              <div class="form-field">
+                <label>Mật khẩu mới</label>
+                <input class="form-control" type="password" id="accountNewPassword">
+              </div>
+
+              <div class="form-field">
+                <label>Nhập lại mật khẩu mới</label>
+                <input class="form-control" type="password" id="accountConfirmPassword">
+              </div>
+
+              <div class="form-field">
+                <label>Mật khẩu HIỆN TẠI</label>
+                <input class="form-control" type="password" id="accountCurrentPassword" required>
+              </div>
+
+              <button type="submit" class="button button-primary" id="accountSubmitBtn">✓ Cập nhật tài khoản</button>
             </form>
           </section>
         </section>
