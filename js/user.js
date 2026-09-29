@@ -120,7 +120,8 @@ async function loadHashtagsList() {
 async function loadAllFiles() {
   const { data } = await supabaseClient
     .from("file")
-    .select("id, file_name, storage_path, bio, created_at, id_user, id_folder, status, user:id_user(user_name), folder:id_folder(display_name, bucket_name), file_hashtag(hashtag:id_hashtag(id, name))")
+    .select("id, file_name, storage_path, bio, created_at, id_user, id_folder, status, is_deleted, user:id_user(user_name), folder:id_folder(display_name, bucket_name), file_hashtag(hashtag:id_hashtag(id, name))")
+    .or("is_deleted.is.null,is_deleted.eq.false")
     .order("created_at", { ascending: false });
 
   if (data) {
@@ -761,3 +762,39 @@ async function restoreUserFile(fileId) {
     alert("❌ Lỗi khôi phục: " + err.message);
   }
 }
+// Tải Cài Đặt Tên & Logo cho giao diện User
+async function loadUserSiteBrand() {
+  try {
+    const { data } = await supabaseClient
+      .from("site_settings")
+      .select("site_name, site_logo")
+      .eq("id", 1)
+      .maybeSingle();
+
+    if (data) {
+      const brandEl = document.querySelector(".brand");
+      if (!brandEl) return;
+
+      const brandMark = brandEl.querySelector(".brand-mark");
+      const brandTitle = brandEl.querySelector("strong");
+
+      if (brandTitle && data.site_name) {
+        brandTitle.textContent = data.site_name;
+        document.title = data.site_name;
+      }
+
+      if (brandMark && data.site_logo) {
+        if (data.site_logo.startsWith("http://") || data.site_logo.startsWith("https://")) {
+          brandMark.innerHTML = `<img src="${escapeHTML(data.site_logo)}" alt="Logo" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;">`;
+        } else {
+          brandMark.textContent = data.site_logo.toUpperCase().slice(0, 2);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Chưa tải được cài đặt giao diện user:", err);
+  }
+}
+
+// Gọi hàm này trong bootstrapUserPage()
+document.addEventListener("DOMContentLoaded", loadUserSiteBrand);

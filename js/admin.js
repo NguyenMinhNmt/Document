@@ -143,11 +143,11 @@ async function loadHashtagsList() {
     renderHashtagFilterContainer();
   }
 }
-
 async function loadAllFiles() {
   const { data } = await supabaseClient
     .from("file")
-    .select("id, file_name, storage_path, bio, created_at, id_user, id_folder, status, user:id_user(user_name), folder:id_folder(display_name, bucket_name), file_hashtag(hashtag:id_hashtag(id, name))")
+    .select("id, file_name, storage_path, bio, created_at, id_user, id_folder, status, is_deleted, user:id_user(user_name), folder:id_folder(display_name, bucket_name), file_hashtag(hashtag:id_hashtag(id, name))")
+    .or("is_deleted.is.null,is_deleted.eq.false") // Lấy cả file chưa xóa và file cũ chưa gán flag
     .order("created_at", { ascending: false });
 
   if (data) {
