@@ -189,18 +189,16 @@
           <label for="loginEmail">Email hoặc Tên tài khoản (Username)</label>
           <input type="text" class="form-control" id="loginEmail" required placeholder="Nhập username hoặc email...">
         </div>
+
         <div class="form-group">
           <label for="loginPassword">Mật khẩu</label>
-          <div class="form-group">
-            <label for="loginPassword">Mật khẩu</label>
-            <div style="position: relative; display: flex; align-items: center;">
-              <input type="password" class="form-control" id="loginPassword" required placeholder="••••••••"
-                style="padding-right: 2.5rem; width: 100%;">
-              <button type="button" onclick="togglePasswordVisibility('loginPassword', this)"
-                style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; font-size: 1.1rem; color: #64748B;">
-                👁️
-              </button>
-            </div>
+          <div style="position: relative; display: flex; align-items: center;">
+            <input type="password" class="form-control" id="loginPassword" required placeholder="••••••••"
+              style="padding-right: 2.5rem; width: 100%;">
+            <button type="button" onclick="togglePasswordVisibility('loginPassword', this)"
+              style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; font-size: 1.1rem; color: #64748B;">
+              👁️
+            </button>
           </div>
         </div>
         <div class="link-group">
@@ -220,20 +218,19 @@
           <label for="regEmail">Email nhận mã xác thực</label>
           <input type="email" class="form-control" id="regEmail" required placeholder="nhapemail@gmail.com">
         </div>
-        <div class="form-group" id="fieldRegPass">
-          <label for="regPassword">Mật khẩu</label>
-          <div class="form-group">
-            <label for="loginPassword">Mật khẩu</label>
-            <div style="position: relative; display: flex; align-items: center;">
-              <input type="password" class="form-control" id="regPassword" required placeholder="••••••••"
-                style="padding-right: 2.5rem; width: 100%;">
-              <button type="button" onclick="togglePasswordVisibility('regPassword', this)"
-                style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; font-size: 1.1rem; color: #64748B;">
-                👁️
-              </button>
-            </div>
+
+        <div class="form-group">
+          <label for="loginPassword">Mật khẩu</label>
+          <div style="position: relative; display: flex; align-items: center;">
+            <input type="password" class="form-control" id="regPassword" required placeholder="••••••••"
+              style="padding-right: 2.5rem; width: 100%;">
+            <button type="button" onclick="togglePasswordVisibility('regPassword', this)"
+              style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; font-size: 1.1rem; color: #64748B;">
+              👁️
+            </button>
           </div>
         </div>
+
         <div class="link-group" style="justify-content: flex-end;">
           <a class="link-item" id="btnShowLoginFromReg">Quay lại Đăng nhập</a>
         </div>
@@ -258,35 +255,33 @@
 
       <!-- 5. FORM 4: ĐẶT LẠI MẬT KHẨU MỚI (CHỈ XUẤT HIỆN Ở LUỒNG QUÊN MK) -->
       <form id="resetPasswordForm" style="display: none;">
-        <div class="form-group">
-          <label for="newPassword">Mật khẩu mới</label>
 
-          <div class="form-group">
-            <label for="loginPassword">Mật khẩu</label>
-            <div style="position: relative; display: flex; align-items: center;">
-              <input type="password" class="form-control" id="newPassword" required placeholder="••••••••"
-                style="padding-right: 2.5rem; width: 100%;">
-              <button type="button" onclick="togglePasswordVisibility('newPassword', this)"
-                style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; font-size: 1.1rem; color: #64748B;">
-                👁️
-              </button>
-            </div>
-          </div>
-        </div>
+
         <div class="form-group">
-          <label for="confirmNewPassword">Xác nhận mật khẩu mới</label>
-          <div class="form-group">
-            <label for="loginPassword">Mật khẩu</label>
-            <div style="position: relative; display: flex; align-items: center;">
-              <input type="password" class="form-control" id="confirmNewPassword" required placeholder="••••••••"
-                style="padding-right: 2.5rem; width: 100%;">
-              <button type="button" onclick="togglePasswordVisibility('confirmNewPassword', this)"
-                style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; font-size: 1.1rem; color: #64748B;">
-                👁️
-              </button>
-            </div>
+          <label for="loginPassword">Mật khẩu mới</label>
+          <div style="position: relative; display: flex; align-items: center;">
+            <input type="password" class="form-control" id="newPassword" required placeholder="••••••••"
+              style="padding-right: 2.5rem; width: 100%;">
+            <button type="button" onclick="togglePasswordVisibility('newPassword', this)"
+              style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; font-size: 1.1rem; color: #64748B;">
+              👁️
+            </button>
           </div>
         </div>
+
+
+        <div class="form-group">
+          <label for="loginPassword">Xác nhận mật khẩu mới</label>
+          <div style="position: relative; display: flex; align-items: center;">
+            <input type="password" class="form-control" id="confirmNewPassword" required placeholder="••••••••"
+              style="padding-right: 2.5rem; width: 100%;">
+            <button type="button" onclick="togglePasswordVisibility('confirmNewPassword', this)"
+              style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; font-size: 1.1rem; color: #64748B;">
+              👁️
+            </button>
+          </div>
+        </div>
+
         <button type="submit" class="btn-primary" id="resetPassSubmitBtn">Lưu mật khẩu mới</button>
       </form>
     </div>
