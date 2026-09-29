@@ -276,17 +276,43 @@
 
               <div class="form-field">
                 <label>Mật khẩu mới</label>
-                <input class="form-control" type="password" id="accountNewPassword">
+
+                <div style="position: relative; display: flex; align-items: center;">
+                  <input class="form-control" type="password" id="accountNewPassword" placeholder="••••••••"
+                    style="padding-right: 2.5rem; width: 100%;">
+                  <button type="button" class="toggle-password-btn"
+                    onclick="togglePasswordVisibility('accountNewPassword', this)"
+                    style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; font-size: 1.1rem; padding: 0; color: var(--text-sub, #666);">
+                    👁️
+                  </button>
+                </div>
               </div>
 
               <div class="form-field">
                 <label>Nhập lại mật khẩu mới</label>
-                <input class="form-control" type="password" id="accountConfirmPassword">
+                <div style="position: relative; display: flex; align-items: center;">
+                  <input class="form-control" type="password" id="accountConfirmPassword" placeholder="••••••••"
+                    style="padding-right: 2.5rem; width: 100%;">
+                  <button type="button" class="toggle-password-btn"
+                    onclick="togglePasswordVisibility('accountConfirmPassword', this)"
+                    style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; font-size: 1.1rem; padding: 0; color: var(--text-sub, #666);">
+                    👁️
+                  </button>
+                </div>
               </div>
 
               <div class="form-field">
                 <label>Mật khẩu HIỆN TẠI</label>
-                <input class="form-control" type="password" id="accountCurrentPassword" required>
+
+                <div style="position: relative; display: flex; align-items: center;">
+                  <input class="form-control" type="password" id="accountCurrentPassword" placeholder="••••••••"
+                    style="padding-right: 2.5rem; width: 100%;">
+                  <button type="button" class="toggle-password-btn"
+                    onclick="togglePasswordVisibility('accountCurrentPassword', this)"
+                    style="position: absolute; right: 10px; background: none; border: none; cursor: pointer; font-size: 1.1rem; padding: 0; color: var(--text-sub, #666);">
+                    👁️
+                  </button>
+                </div>
               </div>
 
               <button type="submit" class="button button-primary" id="accountSubmitBtn">✓ Cập nhật tài khoản</button>
