@@ -119,22 +119,35 @@ async function loadHashtagsList() {
 }
 
 async function loadAllFiles() {
-  const { data } = await supabaseClient
-    .from("file")
-    .select("id, file_name, storage_path, bio, created_at, id_user, id_folder, status, is_deleted, user:id_user(user_name), folder:id_folder(display_name, bucket_name), file_hashtag(hashtag:id_hashtag(id, name))")
-    .or("is_deleted.is.null,is_deleted.eq.false")
-    .order("created_at", { ascending: false });
+  try {
+    const { data, error } = await supabaseClient
+      .from("file")
+      .select("id, file_name, storage_path, bio, created_at, id_user, id_folder, status, is_deleted, user:id_user(user_name), folder:id_folder(display_name, bucket_name), file_hashtag(hashtag:id_hashtag(id, name))")
+      .order("created_at", { ascending: false });
 
-  if (data) {
-    allFilesData = data.filter(f => f.status || f.id_user === currentUser?.id);
-    localStorage.setItem("cache_files", JSON.stringify(allFilesData));
-    const countEl = document.getElementById("userFileCountLabel");
-    if (countEl && currentUser) {
-      countEl.textContent = `${allFilesData.filter(f => f.id_user === currentUser.id).length} file đã upload`;
+    // HIỆN THÔNG BÁO NẾU SUPABASE TỪ CHỐI TRẢ DỮ LIỆU
+    if (error) {
+      console.error("LỖI SUPABASE BÊN USER:", error);
+      alert("LỖI TẢI FILE (USER): " + error.message);
+      return;
     }
-    if (window.location.hash.replace("#", "") === "documents" || !window.location.hash) {
-      renderDocTable();
+
+    if (data) {
+      // Lọc hiển thị: Chỉ hiện file đã duyệt (status = true) HOẶC file do chính user đang đăng nhập tải lên
+      allFilesData = data.filter(f => f.status || f.id_user === currentUser?.id);
+      localStorage.setItem("cache_files", JSON.stringify(allFilesData));
+
+      const countEl = document.getElementById("userFileCountLabel");
+      if (countEl && currentUser) {
+        countEl.textContent = `${allFilesData.filter(f => f.id_user === currentUser.id).length} file đã upload`;
+      }
+
+      if (window.location.hash.replace("#", "") === "documents" || !window.location.hash) {
+        renderDocTable();
+      }
     }
+  } catch (err) {
+    alert("LỖI MẠNG/CODE (USER): " + err.message);
   }
 }
 

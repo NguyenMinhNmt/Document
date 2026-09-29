@@ -144,18 +144,28 @@ async function loadHashtagsList() {
 }
 
 async function loadAllFiles() {
-  const { data } = await supabaseClient
-    .from("file")
-    .select("id, file_name, storage_path, bio, created_at, id_user, id_folder, status, is_deleted, user:id_user(user_name), folder:id_folder(display_name, bucket_name), file_hashtag(hashtag:id_hashtag(id, name))")
-    .or("is_deleted.is.null,is_deleted.eq.false")
-    .order("created_at", { ascending: false });
+  try {
+    const { data, error } = await supabaseClient
+      .from("file")
+      .select("id, file_name, storage_path, bio, created_at, id_user, id_folder, status, is_deleted, user:id_user(user_name), folder:id_folder(display_name, bucket_name), file_hashtag(hashtag:id_hashtag(id, name))")
+      .order("created_at", { ascending: false });
 
-  if (data) {
-    allFilesData = data;
-    localStorage.setItem("cache_admin_files", JSON.stringify(data));
-    if (window.location.hash.replace("#", "") === "files" || !window.location.hash) {
-      renderFileTable();
+    // NẾU CÓ LỖI TỪ SUPABASE, NÓ SẼ HIỆN LÊN MÀN HÌNH ĐỂ TA BIẾT NGAY
+    if (error) {
+      console.error("LỖI SUPABASE:", error);
+      alert("LỖI TẢI FILE: " + error.message);
+      return;
     }
+
+    if (data) {
+      allFilesData = data;
+      localStorage.setItem("cache_admin_files", JSON.stringify(data));
+      if (window.location.hash.replace("#", "") === "files" || !window.location.hash) {
+        renderFileTable();
+      }
+    }
+  } catch (err) {
+    alert("LỖI MẠNG/CODE: " + err.message);
   }
 }
 
