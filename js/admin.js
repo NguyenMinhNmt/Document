@@ -645,7 +645,12 @@ function renderFolderManageList() {
     <tr>
       <td><strong>${escapeHTML(f.display_name)}</strong></td>
       <td><code>${escapeHTML(f.bucket_name)}</code></td>
-      <td><button class="action-btn delete" data-delete-folder="${f.id}">⌫</button></td>
+      <td>
+        <div class="actions">
+          <button class="action-btn" onclick="openEditFolderModal('${f.id}')" title="Sửa tên Folder">✏️</button>
+          <button class="action-btn delete" data-delete-folder="${f.id}" title="Xóa Folder">⌫</button>
+        </div>
+      </td>
     </tr>
   `).join('');
   body.querySelectorAll("[data-delete-folder]").forEach(b => b.addEventListener("click", () => deleteFolder(b.dataset.deleteFolder)));
@@ -698,7 +703,12 @@ function renderHashtagManageList() {
     <tr>
       <td><strong>#${escapeHTML(h.name)}</strong></td>
       <td>${formatDate(h.created_at)}</td>
-      <td><button class="action-btn delete" data-delete-hashtag="${h.id}">⌫</button></td>
+      <td>
+        <div class="actions">
+          <button class="action-btn" onclick="openEditHashtagModal('${h.id}')" title="Sửa tên Hashtag">✏️</button>
+          <button class="action-btn delete" data-delete-hashtag="${h.id}" title="Xóa Hashtag">⌫</button>
+        </div>
+      </td>
     </tr>
   `).join('');
   body.querySelectorAll("[data-delete-hashtag]").forEach(b => b.addEventListener("click", () => deleteHashtag(b.dataset.deleteHashtag)));
