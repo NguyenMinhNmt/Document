@@ -1632,3 +1632,59 @@ input:checked+.slider:before {
   border-radius: var(--radius-md, 12px);
   color: var(--text-main, #ffffff);
 }
+
+/* Styling cho giao diện trang Login/Register */
+.password-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-wrap .form-control {
+  padding-right: 2.75rem;
+}
+
+.toggle-pass-btn {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  color: #64748B;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: justify-center;
+}
+
+.link-group-right {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.85rem;
+}
+
+.otp-target-email {
+  color: #4F46E5;
+}
+
+.otp-timer-box {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.otp-timer-label {
+  font-size: 0.85rem;
+  color: #64748B;
+}
+
+.otp-resend-link {
+  display: none;
+  font-size: 0.85rem;
+}
+
+.hidden-form {
+  display: none;
+}

@@ -10,188 +10,30 @@
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="../css/style.css">
-  <style>
-    /* Kiểu dáng giao diện Modern Clean Card */
-    body {
-      background-color: #F8FAFC;
-      font-family: 'Be Vietnam Pro', sans-serif;
-      margin: 0;
-    }
-
-    .auth-wrapper {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      padding: 1rem;
-    }
-
-    .auth-card {
-      background: #FFFFFF;
-      width: 100%;
-      max-width: 440px;
-      padding: 2.5rem 2rem;
-      border-radius: 16px;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
-    }
-
-    .brand-logo {
-      width: 56px;
-      height: 56px;
-      background: #1E293B;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.75rem;
-      font-weight: bold;
-      border-radius: 50%;
-      margin: 0 auto 1rem;
-      overflow: hidden;
-    }
-
-    .brand-logo img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .auth-title {
-      text-align: center;
-      color: #0F172A;
-      font-size: 1.5rem;
-      font-weight: 700;
-      margin-bottom: 0.25rem;
-    }
-
-    .auth-subtitle {
-      text-align: center;
-      color: #64748B;
-      font-size: 0.9rem;
-      margin-bottom: 2rem;
-    }
-
-    .form-group {
-      margin-bottom: 1.25rem;
-    }
-
-    .form-group label {
-      display: block;
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: #334155;
-      margin-bottom: 0.5rem;
-    }
-
-    .form-control {
-      width: 100%;
-      padding: 0.75rem 1rem;
-      border: 1px solid #CBD5E1;
-      border-radius: 8px;
-      font-size: 0.95rem;
-      font-family: inherit;
-      box-sizing: border-radius;
-      transition: border-color 0.2s;
-    }
-
-    .form-control:focus {
-      outline: none;
-      border-color: #4F46E5;
-      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
-    }
-
-    .btn-primary {
-      width: 100%;
-      padding: 0.85rem;
-      background: #4F46E5;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .btn-primary:hover:not(:disabled) {
-      background: #4338CA;
-    }
-
-    .btn-primary:disabled {
-      opacity: 0.7;
-      cursor: not-allowed;
-    }
-
-    .link-group {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 0.5rem;
-      margin-bottom: 1.5rem;
-      font-size: 0.85rem;
-    }
-
-    .link-item {
-      color: #4F46E5;
-      text-decoration: none;
-      font-weight: 500;
-      cursor: pointer;
-    }
-
-    .link-item:hover {
-      text-decoration: underline;
-    }
-
-    /* Thiết kế ô nhập OTP 1 ô linh hoạt duy nhất */
-    .otp-input-single {
-      text-align: center;
-      font-size: 1.75rem;
-      font-weight: 700;
-      letter-spacing: 6px;
-      padding: 0.8rem;
-      color: #1E293B;
-    }
-
-    .toast {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: #1E293B;
-      color: white;
-      padding: 1rem 1.25rem;
-      border-radius: 8px;
-      transform: translateY(100px);
-      opacity: 0;
-      transition: all 0.3s;
-      z-index: 9999;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-
-    .toast.show {
-      transform: translateY(0);
-      opacity: 1;
-    }
-  </style>
 </head>
 
 <body>
   <div class="auth-wrapper">
     <div class="auth-card">
-      <!-- 1. KHỐI LOGO VÀ TIÊU ĐỀ TRANG (TỰ ĐỘNG TẢI TỪ DATABASE) -->
       <div class="brand-logo" id="siteLogoContainer">
         <span id="siteLogoText">T</span>
       </div>
       <h2 class="auth-title" id="authTitle">Đăng nhập</h2>
       <p class="auth-subtitle" id="authSubTitle">Chào mừng bạn quay trở lại <span id="siteName">Web Tài Liệu</span></p>
 
-      <!-- 2. FORM 1: ĐĂNG NHẬP TÀI KHOẢN (HỖ TRỢ CẢ USERNAME VÀ EMAIL) -->
+      <!-- 1. FORM ĐĂNG NHẬP -->
       <form id="loginForm">
         <div class="form-group">
-          <label for="loginEmail">Email hoặc Tên tài khoản (Username)</label>
+          <label for="loginEmail">Email hoặc Username</label>
           <input type="text" class="form-control" id="loginEmail" required placeholder="Nhập username hoặc email...">
         </div>
         <div class="form-group">
           <label for="loginPassword">Mật khẩu</label>
-          <input type="password" class="form-control" id="loginPassword" required placeholder="••••••••">
+          <div class="password-input-wrap">
+            <input type="password" class="form-control" id="loginPassword" required placeholder="••••••••">
+            <button type="button" class="toggle-pass-btn"
+              onclick="togglePasswordVisibility('loginPassword', this)">👁️</button>
+          </div>
         </div>
         <div class="link-group">
           <a class="link-item" id="btnShowForgot">Quên mật khẩu?</a>
@@ -200,10 +42,10 @@
         <button type="submit" class="btn-primary" id="loginSubmitBtn">Đăng nhập</button>
       </form>
 
-      <!-- 3. FORM 2: ĐĂNG KÝ HOẶC QUÊN MẬT KHẨU (GỬI MÃ OTP) -->
-      <form id="registerForm" style="display: none;">
+      <!-- 2. FORM ĐĂNG KÝ HOẶC QUÊN MẬT KHẨU -->
+      <form id="registerForm" class="hidden-form">
         <div class="form-group" id="fieldRegName">
-          <label for="regName">Tên hiển thị (Username)</label>
+          <label for="regName" id="lblRegName">Tên hiển thị (Username)</label>
           <input type="text" class="form-control" id="regName" placeholder="Ví dụ: Nmt">
         </div>
         <div class="form-group">
@@ -212,46 +54,57 @@
         </div>
         <div class="form-group" id="fieldRegPass">
           <label for="regPassword">Mật khẩu</label>
-          <input type="password" class="form-control" id="regPassword" placeholder="••••••••">
+          <div class="password-input-wrap">
+            <input type="password" class="form-control" id="regPassword" placeholder="••••••••">
+            <button type="button" class="toggle-pass-btn"
+              onclick="togglePasswordVisibility('regPassword', this)">👁️</button>
+          </div>
         </div>
-        <div class="link-group" style="justify-content: flex-end;">
+        <div class="link-group-right">
           <a class="link-item" id="btnShowLoginFromReg">Quay lại Đăng nhập</a>
         </div>
         <button type="submit" class="btn-primary" id="regSubmitBtn">Tiếp tục (Nhận mã OTP)</button>
       </form>
 
-      <!-- 4. FORM 3: XÁC THỰC MÃ OTP (1 Ô NHẬP DUY NHẤT HỖ TRỢ PASTE TỰ ĐỘNG) -->
-      <form id="otpForm" style="display: none;">
-        <p style="text-align: center; font-size: 0.9rem; margin-bottom: 1.5rem; color: #475569;">
-          Mã xác thực đã được gửi tới email:<br><strong id="otpTargetEmail" style="color: #4F46E5;">---</strong>
+      <!-- 3. FORM XÁC THỰC OTP -->
+      <form id="otpForm" class="hidden-form">
+        <p class="auth-subtitle">
+          Mã xác thực đã được gửi tới email:<br><strong id="otpTargetEmail" class="otp-target-email">---</strong>
         </p>
         <div class="form-group">
           <input type="text" class="form-control otp-input-single" id="otpSingleInput" required autofocus
             placeholder="Nhập mã OTP...">
         </div>
-        <div style="text-align: center; margin-bottom: 1.5rem;">
-          <span id="otpTimerLabel" style="font-size: 0.85rem; color: #64748B;">Gửi lại mã sau 60s</span>
-          <a id="btnResendOtp" class="link-item" style="display: none; font-size: 0.85rem;">🔄 Gửi lại mã OTP mới</a>
+        <div class="otp-timer-box">
+          <span id="otpTimerLabel" class="otp-timer-label">Gửi lại mã sau 60s</span>
+          <a id="btnResendOtp" class="link-item otp-resend-link">🔄 Gửi lại mã OTP mới</a>
         </div>
         <button type="submit" class="btn-primary" id="otpSubmitBtn">Xác thực & Hoàn tất</button>
       </form>
 
-      <!-- 5. FORM 4: ĐẶT LẠI MẬT KHẨU MỚI (CHỈ XUẤT HIỆN Ở LUỒNG QUÊN MK) -->
-      <form id="resetPasswordForm" style="display: none;">
+      <!-- 4. FORM TẠO MẬT KHẨU MỚI -->
+      <form id="resetPasswordForm" class="hidden-form">
         <div class="form-group">
           <label for="newPassword">Mật khẩu mới</label>
-          <input type="password" class="form-control" id="newPassword" required placeholder="••••••••">
+          <div class="password-input-wrap">
+            <input type="password" class="form-control" id="newPassword" required placeholder="••••••••">
+            <button type="button" class="toggle-pass-btn"
+              onclick="togglePasswordVisibility('newPassword', this)">👁️</button>
+          </div>
         </div>
         <div class="form-group">
           <label for="confirmNewPassword">Xác nhận mật khẩu mới</label>
-          <input type="password" class="form-control" id="confirmNewPassword" required placeholder="••••••••">
+          <div class="password-input-wrap">
+            <input type="password" class="form-control" id="confirmNewPassword" required placeholder="••••••••">
+            <button type="button" class="toggle-pass-btn"
+              onclick="togglePasswordVisibility('confirmNewPassword', this)">👁️</button>
+          </div>
         </div>
         <button type="submit" class="btn-primary" id="resetPassSubmitBtn">Lưu mật khẩu mới</button>
       </form>
     </div>
   </div>
 
-  <!-- THÔNG BÁO TOAST NỔI GÓC MÀN HÌNH -->
   <div class="toast" id="toast">
     <strong id="toastTitle">Thông báo</strong>
     <div id="toastMessage">Nội dung thông báo</div>
@@ -259,8 +112,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/config.js"></script>
-  <!-- THÊM THAM SỐ ?v=100 ĐỂ CHỐNG KẸT CACHE TRÌNH DUYỆT -->
-  <script src="../js/auth.js?v=100"></script>
+  <script src="../js/auth.js?v=101"></script>
 </body>
 
 </html>
