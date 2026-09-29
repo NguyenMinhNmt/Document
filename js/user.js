@@ -844,9 +844,14 @@ function renderAvatarUI(avatarUrl, userName) {
   const elUserAvatar = document.getElementById("userAvatar");
   if (!elUserAvatar) return;
 
-  if (avatarUrl && (avatarUrl.startsWith("http://") || avatarUrl.startsWith("https://"))) {
-    elUserAvatar.innerHTML = `<img src="${escapeHTML(avatarUrl)}" alt="Avatar" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
+  // Lọc khoảng trắng thừa
+  const cleanUrl = (avatarUrl || "").trim();
+
+  // Kiểm tra nếu đường dẫn hợp lệ có chứa http:// hoặc https://
+  if (cleanUrl && (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://"))) {
+    elUserAvatar.innerHTML = `<img src="${escapeHTML(cleanUrl)}" alt="Avatar" style="width:100%; height:100%; object-fit:cover; border-radius:50%;" onerror="this.onerror=null; this.parentElement.textContent='${(userName || "U").slice(0, 2).toUpperCase()}';">`;
   } else {
+    // Nếu không phải link ảnh hợp lệ, hiển thị 2 chữ cái đầu của Tên người dùng
     elUserAvatar.textContent = (userName || "U").slice(0, 2).toUpperCase();
   }
 }
