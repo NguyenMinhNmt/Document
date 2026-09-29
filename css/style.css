@@ -1611,3 +1611,24 @@ input:checked+.slider:before {
   color: var(--color-danger);
   font-weight: 700;
 }
+
+/* Fix lỗi Modal chỉnh sửa bị trong suốt */
+#editFolderModal,
+#editHashtagModal {
+  background-color: rgba(0, 0, 0, 0.75) !important;
+  /* Làm tối toàn bộ nền đằng sau */
+  backdrop-filter: blur(4px);
+  /* Làm mờ nhẹ phần background bên dưới */
+}
+
+#editFolderModal .modal-content,
+#editHashtagModal .modal-content {
+  background-color: var(--bg-card, #1e1e1e) !important;
+  /* Đảm bảo màu hộp thoại đục 100% */
+  border: 1px solid var(--border-color, #333);
+  /* Thêm viền nhẹ để tách biệt với nền */
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  /* Đổ bóng giúp hộp thoại nổi bật */
+  border-radius: var(--radius-md, 12px);
+  color: var(--text-main, #ffffff);
+}
