@@ -1,5 +1,5 @@
 /* ==========================================================================
-   USER.JS - Tối ưu SWR + Quản lý File, Folder, Hashtag, Trash (User)
+   USER.JS - Tối ưu SWR + Tính năng Thùng rác của tôi (Chuẩn Query)
    ========================================================================== */
 
 const pageTitles = {
@@ -83,7 +83,7 @@ async function revalidateTabData(tab) {
   } else if (tab === "upload") {
     await Promise.all([loadFolders(), loadHashtagsList()]);
   } else if (tab === "trash") {
-    await loadUserTrashBin();
+    await loadUserTrashBin(); // Tải dữ liệu thùng rác của user
   }
 }
 
@@ -122,18 +122,17 @@ async function loadAllFiles() {
   try {
     const { data, error } = await supabaseClient
       .from("file")
-      .select("id, file_name, storage_path, bio, created_at, id_user, id_folder, status, is_deleted, user:id_user(user_name), folder:id_folder(display_name, bucket_name), file_hashtag(hashtag:id_hashtag(id, name))")
+      // Truy vấn chuẩn không sử dụng alias phức tạp, có lọc is_deleted
+      .select("id, file_name, storage_path, bio, created_at, id_user, id_folder, status, user(user_name), folder(display_name, bucket_name), file_hashtag(hashtag(id, name))")
+      .or("is_deleted.is.null,is_deleted.eq.false")
       .order("created_at", { ascending: false });
 
-    // HIỆN THÔNG BÁO NẾU SUPABASE TỪ CHỐI TRẢ DỮ LIỆU
     if (error) {
-      console.error("LỖI SUPABASE BÊN USER:", error);
-      alert("LỖI TẢI FILE (USER): " + error.message);
+      alert("Lỗi tải danh sách (USER): " + error.message);
       return;
     }
 
     if (data) {
-      // Lọc hiển thị: Chỉ hiện file đã duyệt (status = true) HOẶC file do chính user đang đăng nhập tải lên
       allFilesData = data.filter(f => f.status || f.id_user === currentUser?.id);
       localStorage.setItem("cache_files", JSON.stringify(allFilesData));
 
@@ -147,7 +146,7 @@ async function loadAllFiles() {
       }
     }
   } catch (err) {
-    alert("LỖI MẠNG/CODE (USER): " + err.message);
+    console.error("Load files error:", err);
   }
 }
 
@@ -243,36 +242,18 @@ function renderDocTable() {
           <div class="actions">
             <button class="action-btn" data-download-btn="${file.id}" title="Tải về trực tiếp">⬇</button>
             ${isOwner ? `<button class="action-btn" data-edit-btn="${file.id}" title="Chỉnh sửa tài liệu">✏</button>` : ''}
-            ${isOwner ? `<button class="action-btn delete" data-delete-btn="${file.id}" title="Xóa">⌫</button>` : ''}
+            ${isOwner ? `<button class="action-btn delete" data-delete-btn="${file.id}" title="Chuyển vào thùng rác">⌫</button>` : ''}
           </div>
         </td>
       </tr>`;
   }).join('');
 
-  body.querySelectorAll("tr[data-file-id]").forEach(row => {
-    row.addEventListener("click", () => openPreviewModal(row.dataset.fileId));
-  });
+  body.querySelectorAll("tr[data-file-id]").forEach(row => row.addEventListener("click", () => openPreviewModal(row.dataset.fileId)));
+  body.querySelectorAll("[data-download-btn]").forEach(btn => btn.addEventListener("click", (e) => { e.stopPropagation(); downloadFileDirectly(btn.dataset.downloadBtn); }));
+  body.querySelectorAll("[data-edit-btn]").forEach(btn => btn.addEventListener("click", (e) => { e.stopPropagation(); openEditModal(btn.dataset.editBtn); }));
 
-  body.querySelectorAll("[data-download-btn]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      downloadFileDirectly(btn.dataset.downloadBtn);
-    });
-  });
-
-  body.querySelectorAll("[data-edit-btn]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openEditModal(btn.dataset.editBtn);
-    });
-  });
-
-  body.querySelectorAll("[data-delete-btn]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      deleteFile(btn.dataset.deleteBtn);
-    });
-  });
+  // Nút xóa gọi hàm deleteFile (đã được sửa thành xóa mềm)
+  body.querySelectorAll("[data-delete-btn]").forEach(btn => btn.addEventListener("click", (e) => { e.stopPropagation(); deleteFile(btn.dataset.deleteBtn); }));
 }
 
 function openEditModal(fileId) {
@@ -297,16 +278,13 @@ function openEditModal(fileId) {
 function renderEditSelectedTagsBox() {
   const box = document.getElementById("editSelectedTagsBox");
   if (!box) return;
-
   if (editSelectedTagsList.length === 0) {
     box.innerHTML = '<span style="color:var(--text-faint); font-size:0.8rem;">Chưa chọn hashtag nào</span>';
     return;
   }
-
   box.innerHTML = editSelectedTagsList.map((tag, idx) => `
     <span class="tag-chip">#${escapeHTML(tag)} <button type="button" data-remove-edit-tag="${idx}">✕</button></span>
   `).join('');
-
   box.querySelectorAll("[data-remove-edit-tag]").forEach(btn => {
     btn.addEventListener("click", () => {
       editSelectedTagsList.splice(parseInt(btn.dataset.removeEditTag), 1);
@@ -320,8 +298,7 @@ function renderEditAvailableTagsSelect() {
   const select = document.getElementById("editAvailableTagsSelect");
   if (!select) return;
   const available = allHashtagsData.filter(t => !editSelectedTagsList.includes(t.name));
-  select.innerHTML = '<option value="">-- Chọn hashtag có sẵn --</option>' +
-    available.map(t => `<option value="${escapeHTML(t.name)}">#${escapeHTML(t.name)}</option>`).join('');
+  select.innerHTML = '<option value="">-- Chọn hashtag có sẵn --</option>' + available.map(t => `<option value="${escapeHTML(t.name)}">#${escapeHTML(t.name)}</option>`).join('');
 }
 
 document.getElementById("btnEditAddSelectedTag")?.addEventListener("click", () => {
@@ -344,9 +321,7 @@ document.getElementById("btnEditAddCustomTag")?.addEventListener("click", () => 
   }
 });
 
-document.querySelectorAll("[data-close-edit]").forEach(el => {
-  el.addEventListener("click", () => document.getElementById("editFileModal").classList.remove("open"));
-});
+document.querySelectorAll("[data-close-edit]").forEach(el => el.addEventListener("click", () => document.getElementById("editFileModal").classList.remove("open")));
 
 document.getElementById("editFileForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -362,12 +337,9 @@ document.getElementById("editFileForm")?.addEventListener("submit", async (e) =>
   submitBtn.textContent = "⏳ Đang lưu...";
 
   try {
-    const { error: updateError } = await supabaseClient
-      .from("file")
-      .update({ file_name: newName, id_folder: newFolderId, bio: newBio })
-      .eq("id", fileId);
-
+    const { error: updateError } = await supabaseClient.from("file").update({ file_name: newName, id_folder: newFolderId, bio: newBio }).eq("id", fileId);
     if (updateError) throw updateError;
+
     await supabaseClient.from("file_hashtag").delete().eq("id_file", fileId);
 
     for (const tagName of editSelectedTagsList) {
@@ -383,7 +355,6 @@ document.getElementById("editFileForm")?.addEventListener("submit", async (e) =>
 
     showToast("Thành công", "Đã cập nhật thông tin tài liệu.");
     document.getElementById("editFileModal").classList.remove("open");
-
     await loadAllFiles();
     renderDocTable();
   } catch (err) {
@@ -400,7 +371,6 @@ async function downloadFileDirectly(fileId) {
 
   let bucket = "documents";
   let pathInsideBucket = file.storage_path;
-
   if (file.storage_path.includes("/")) {
     const parts = file.storage_path.split("/");
     bucket = parts[0];
@@ -409,7 +379,6 @@ async function downloadFileDirectly(fileId) {
 
   const { data, error } = await supabaseClient.storage.from(bucket).createSignedUrl(pathInsideBucket, 300, { download: true });
   if (error || !data?.signedUrl) return showToast("Lỗi tải về", "Không thể lấy đường dẫn tải file.");
-
   window.open(data.signedUrl, "_blank");
 }
 
@@ -423,14 +392,11 @@ async function openPreviewModal(fileId) {
   document.getElementById("prevFileTime").textContent = formatDateTime(file.created_at);
   document.getElementById("prevFileBio").textContent = file.bio || "Không có mô tả.";
 
-  const tagsHtml = (file.file_hashtag || [])
-    .map(fh => fh.hashtag?.name ? `<span class="badge">#${escapeHTML(fh.hashtag.name)}</span>` : '')
-    .join(' ');
+  const tagsHtml = (file.file_hashtag || []).map(fh => fh.hashtag?.name ? `<span class="badge">#${escapeHTML(fh.hashtag.name)}</span>` : '').join(' ');
   document.getElementById("prevFileTags").innerHTML = tagsHtml || '-';
 
   let bucket = "documents";
   let pathInsideBucket = file.storage_path;
-
   if (file.storage_path.includes("/")) {
     const parts = file.storage_path.split("/");
     bucket = parts[0];
@@ -442,7 +408,6 @@ async function openPreviewModal(fileId) {
   const signedUrl = data?.signedUrl || "#";
 
   document.getElementById("prevDownloadBtn").href = signedUrl;
-
   const viewerBox = document.getElementById("previewViewerBox");
 
   if (error || !data?.signedUrl) {
@@ -469,20 +434,16 @@ async function openPreviewModal(fileId) {
         </div>
       </div>`;
   }
-
   document.getElementById("previewFileModal").classList.add("open");
 }
 
-document.querySelectorAll("[data-close-preview]").forEach(el => {
-  el.addEventListener("click", () => document.getElementById("previewFileModal").classList.remove("open"));
-});
+document.querySelectorAll("[data-close-preview]").forEach(el => el.addEventListener("click", () => document.getElementById("previewFileModal").classList.remove("open")));
 
 function renderAvailableTagsSelect() {
   const select = document.getElementById("availableTagsSelect");
   if (!select) return;
   const available = allHashtagsData.filter(t => !selectedTagsList.includes(t.name));
-  select.innerHTML = '<option value="">-- Chọn hashtag có sẵn --</option>' +
-    available.map(t => `<option value="${escapeHTML(t.name)}">#${escapeHTML(t.name)}</option>`).join('');
+  select.innerHTML = '<option value="">-- Chọn hashtag có sẵn --</option>' + available.map(t => `<option value="${escapeHTML(t.name)}">#${escapeHTML(t.name)}</option>`).join('');
 }
 
 function renderSelectedTagsBox() {
@@ -492,17 +453,12 @@ function renderSelectedTagsBox() {
     box.innerHTML = '<span style="color:var(--text-faint); font-size:0.8rem;">Chưa chọn hashtag nào</span>';
     return;
   }
-  box.innerHTML = selectedTagsList.map((tag, idx) => `
-    <span class="tag-chip">#${escapeHTML(tag)} <button type="button" data-remove-tag="${idx}">✕</button></span>
-  `).join('');
-
-  box.querySelectorAll("[data-remove-tag]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      selectedTagsList.splice(parseInt(btn.dataset.removeTag), 1);
-      renderSelectedTagsBox();
-      renderAvailableTagsSelect();
-    });
-  });
+  box.innerHTML = selectedTagsList.map((tag, idx) => `<span class="tag-chip">#${escapeHTML(tag)} <button type="button" data-remove-tag="${idx}">✕</button></span>`).join('');
+  box.querySelectorAll("[data-remove-tag]").forEach(btn => btn.addEventListener("click", () => {
+    selectedTagsList.splice(parseInt(btn.dataset.removeTag), 1);
+    renderSelectedTagsBox();
+    renderAvailableTagsSelect();
+  }));
 }
 
 document.getElementById("btnAddSelectedTag")?.addEventListener("click", () => {
@@ -586,7 +542,6 @@ document.getElementById("uploadForm")?.addEventListener("submit", async (e) => {
 async function loadLeaderboard() {
   const { data } = await supabaseClient.from("user").select("user_name, score").order("score", { ascending: false }).limit(20);
   const users = data || [];
-
   const podiumBox = document.getElementById("podiumTop3");
   const restBody = document.getElementById("leaderboardRestBody");
 
@@ -598,18 +553,11 @@ async function loadLeaderboard() {
   if (top2) podiumHtml += `<div class="podium-card rank-2"><div class="podium-badge">2</div><div class="podium-avatar">${escapeHTML(top2.user_name.slice(0, 2).toUpperCase())}</div><strong>${escapeHTML(top2.user_name)}</strong><p style="color:var(--text-sub); font-size:0.85rem; margin-top:0.3rem;">${top2.score || 0} tài liệu</p></div>`;
   if (top1) podiumHtml += `<div class="podium-card rank-1"><div class="podium-badge">1</div><div class="podium-avatar">${escapeHTML(top1.user_name.slice(0, 2).toUpperCase())}</div><strong style="font-size:1.05rem;">${escapeHTML(top1.user_name)}</strong><p style="color:#f59e0b; font-weight:700; margin-top:0.3rem;">${top1.score || 0} tài liệu</p></div>`;
   if (top3) podiumHtml += `<div class="podium-card rank-3"><div class="podium-badge">3</div><div class="podium-avatar">${escapeHTML(top3.user_name.slice(0, 2).toUpperCase())}</div><strong>${escapeHTML(top3.user_name)}</strong><p style="color:var(--text-sub); font-size:0.85rem; margin-top:0.3rem;">${top3.score || 0} tài liệu</p></div>`;
-
   podiumBox.innerHTML = podiumHtml;
 
   const restUsers = users.slice(3);
   if (restBody) {
-    restBody.innerHTML = restUsers.map((u, i) => `
-      <tr>
-        <td><strong>#${i + 4}</strong></td>
-        <td>${escapeHTML(u.user_name)}</td>
-        <td><strong>${u.score || 0}</strong> tài liệu</td>
-      </tr>
-    `).join('');
+    restBody.innerHTML = restUsers.map((u, i) => `<tr><td><strong>#${i + 4}</strong></td><td>${escapeHTML(u.user_name)}</td><td><strong>${u.score || 0}</strong> tài liệu</td></tr>`).join('');
   }
 }
 
@@ -618,18 +566,19 @@ document.getElementById("accountForm")?.addEventListener("submit", async (e) => 
   const name = document.getElementById("accountNewName").value.trim();
   const pass = document.getElementById("accountNewPassword").value;
   const currPass = document.getElementById("accountCurrentPassword").value;
-
   const { error } = await supabaseClient.auth.signInWithPassword({ email: currentUser.email, password: currPass });
   if (error) return showToast("Thất bại", "Mật khẩu hiện tại không đúng.");
-
   if (name) await supabaseClient.from("user").update({ user_name: name }).eq("id", currentUser.id);
   if (pass) await supabaseClient.auth.updateUser({ password: pass });
-
   showToast("Cập nhật thành công!", "");
   document.getElementById("accountForm").reset();
 });
 
-// Chuyển file vào Thùng rác (Xóa mềm)
+// -------------------------------------------------------------------------
+// TÍNH NĂNG THÙNG RÁC CHO USER (Xóa mềm & Khôi phục)
+// -------------------------------------------------------------------------
+
+// 1. Chuyển file vào Thùng rác (Xóa mềm) thay vì xóa vĩnh viễn
 async function deleteFile(fileId) {
   if (!confirm("Bạn có muốn chuyển tài liệu này vào Thùng rác?")) return;
   const { error } = await supabaseClient
@@ -637,21 +586,30 @@ async function deleteFile(fileId) {
     .update({ is_deleted: true, deleted_at: new Date().toISOString() })
     .eq("id", fileId);
 
-  if (error) return showToast("Lỗi", error.message);
+  if (error) {
+    alert("Lỗi khi chuyển vào thùng rác: " + error.message);
+    return;
+  }
+
   await loadAllFiles();
   renderDocTable();
   showToast("Đã chuyển vào Thùng rác", "");
 }
 
-// Tải danh sách Thùng rác cá nhân của User
+// 2. Tải danh sách Thùng rác cá nhân của User
 async function loadUserTrashBin() {
   if (!currentUser) return;
-  const { data } = await supabaseClient
+  const { data, error } = await supabaseClient
     .from("file")
-    .select("id, file_name, deleted_at, folder:id_folder(display_name)")
+    .select("id, file_name, deleted_at, folder(display_name)")
     .eq("id_user", currentUser.id)
     .eq("is_deleted", true)
     .order("deleted_at", { ascending: false });
+
+  if (error) {
+    console.error("Lỗi tải thùng rác:", error);
+    return;
+  }
 
   const trashList = data || [];
   const emptyEl = document.getElementById("userTrashEmptyState");
@@ -673,7 +631,7 @@ async function loadUserTrashBin() {
   `).join('');
 }
 
-// User khôi phục file từ Thùng rác (User KHÔNG CÓ NÚT XÓA VĨNH VIỄN)
+// 3. User khôi phục file từ Thùng rác
 async function restoreUserFile(fileId) {
   await supabaseClient.from("file").update({ is_deleted: false, deleted_at: null }).eq("id", fileId);
   showToast("Đã khôi phục tài liệu thành công!", "");
@@ -681,27 +639,15 @@ async function restoreUserFile(fileId) {
   await loadAllFiles();
 }
 
-// Tải Cài Đặt Tên & Logo cho giao diện User
 async function loadUserSiteBrand() {
   try {
-    const { data } = await supabaseClient
-      .from("site_settings")
-      .select("site_name, site_logo")
-      .eq("id", 1)
-      .maybeSingle();
-
+    const { data } = await supabaseClient.from("site_settings").select("site_name, site_logo").eq("id", 1).maybeSingle();
     if (data) {
       const brandEl = document.querySelector(".brand");
       if (!brandEl) return;
-
       const brandMark = brandEl.querySelector(".brand-mark");
       const brandTitle = brandEl.querySelector("strong");
-
-      if (brandTitle && data.site_name) {
-        brandTitle.textContent = data.site_name;
-        document.title = data.site_name;
-      }
-
+      if (brandTitle && data.site_name) { brandTitle.textContent = data.site_name; document.title = data.site_name; }
       if (brandMark && data.site_logo) {
         if (data.site_logo.startsWith("http://") || data.site_logo.startsWith("https://")) {
           brandMark.innerHTML = `<img src="${escapeHTML(data.site_logo)}" alt="Logo" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;">`;
@@ -710,9 +656,7 @@ async function loadUserSiteBrand() {
         }
       }
     }
-  } catch (err) {
-    console.warn("Chưa tải được cài đặt giao diện user:", err);
-  }
+  } catch (err) { console.warn("Lỗi tải giao diện:", err); }
 }
 
 document.getElementById("btnGoToUpload")?.addEventListener("click", () => switchPage("upload"));
@@ -732,15 +676,12 @@ function switchPage(p) {
   if (activeEl) activeEl.classList.add("active");
   if (elBreadcrumbCurrent) elBreadcrumbCurrent.textContent = pageTitles[targetPage];
   if (elSidebar) elSidebar.classList.remove("open");
-  if (window.location.hash !== `#${targetPage}`) {
-    history.pushState(null, "", `#${targetPage}`);
-  }
+  if (window.location.hash !== `#${targetPage}`) { history.pushState(null, "", `#${targetPage}`); }
 }
 
 function restorePageFromHash() {
   const saved = window.location.hash.replace("#", "");
-  if (saved && pageTitles[saved]) switchPage(saved);
-  else switchPage("documents");
+  if (saved && pageTitles[saved]) switchPage(saved); else switchPage("documents");
 }
 
 function showToast(t, m) { clearTimeout(toastTimer); document.getElementById("toastTitle").textContent = t; document.getElementById("toastMessage").textContent = m; document.getElementById("toast").classList.add("show"); toastTimer = setTimeout(() => document.getElementById("toast").classList.remove("show"), 2800); }

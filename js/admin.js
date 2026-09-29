@@ -1,5 +1,5 @@
 /* ==========================================================================
-   ADMIN.JS - Tối ưu SWR + Quản lý File, Folder, Hashtag, Settings, Trash
+   ADMIN.JS - Tối ưu SWR + Tính năng Thùng rác (Chuẩn Query)
    ========================================================================== */
 
 const pageTitles = {
@@ -107,7 +107,7 @@ async function revalidateTabData(tab) {
   } else if (tab === "settings") {
     await loadSettings();
   } else if (tab === "trash") {
-    await loadAdminTrashBin();
+    await loadAdminTrashBin(); // Tải dữ liệu thùng rác
   }
 }
 
@@ -147,13 +147,13 @@ async function loadAllFiles() {
   try {
     const { data, error } = await supabaseClient
       .from("file")
-      .select("id, file_name, storage_path, bio, created_at, id_user, id_folder, status, is_deleted, user:id_user(user_name), folder:id_folder(display_name, bucket_name), file_hashtag(hashtag:id_hashtag(id, name))")
+      // Truy vấn chuẩn, không alias, kết hợp lọc is_deleted
+      .select("id, file_name, storage_path, bio, created_at, id_user, id_folder, status, user(user_name), folder(display_name, bucket_name), file_hashtag(hashtag(id, name))")
+      .or("is_deleted.is.null,is_deleted.eq.false")
       .order("created_at", { ascending: false });
 
-    // NẾU CÓ LỖI TỪ SUPABASE, NÓ SẼ HIỆN LÊN MÀN HÌNH ĐỂ TA BIẾT NGAY
     if (error) {
-      console.error("LỖI SUPABASE:", error);
-      alert("LỖI TẢI FILE: " + error.message);
+      alert("Lỗi tải danh sách file: " + error.message);
       return;
     }
 
@@ -165,7 +165,7 @@ async function loadAllFiles() {
       }
     }
   } catch (err) {
-    alert("LỖI MẠNG/CODE: " + err.message);
+    console.error("Load files error:", err);
   }
 }
 
@@ -266,43 +266,17 @@ function renderFileTable() {
             <button class="action-btn" data-download-btn="${file.id}" title="Tải về trực tiếp">⬇</button>
             <button class="action-btn" data-edit-btn="${file.id}" title="Chỉnh sửa tài liệu">✏</button>
             <button class="action-btn" data-toggle-status="${file.id}" title="${file.status ? 'Ẩn' : 'Hiện'}">${file.status ? '🚫' : '↺'}</button>
-            <button class="action-btn delete" data-delete-btn="${file.id}" title="Xóa">⌫</button>
+            <button class="action-btn delete" data-delete-btn="${file.id}" title="Chuyển vào thùng rác">⌫</button>
           </div>
         </td>
       </tr>`;
   }).join('');
 
-  body.querySelectorAll("tr[data-file-id]").forEach(row => {
-    row.addEventListener("click", () => openPreviewModal(row.dataset.fileId));
-  });
-
-  body.querySelectorAll("[data-download-btn]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      downloadFileDirectly(btn.dataset.downloadBtn);
-    });
-  });
-
-  body.querySelectorAll("[data-edit-btn]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openEditModal(btn.dataset.editBtn);
-    });
-  });
-
-  body.querySelectorAll("[data-toggle-status]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      toggleFileStatus(btn.dataset.toggleStatus);
-    });
-  });
-
-  body.querySelectorAll("[data-delete-btn]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      purgeFile(btn.dataset.deleteBtn);
-    });
-  });
+  body.querySelectorAll("tr[data-file-id]").forEach(row => row.addEventListener("click", () => openPreviewModal(row.dataset.fileId)));
+  body.querySelectorAll("[data-download-btn]").forEach(btn => btn.addEventListener("click", (e) => { e.stopPropagation(); downloadFileDirectly(btn.dataset.downloadBtn); }));
+  body.querySelectorAll("[data-edit-btn]").forEach(btn => btn.addEventListener("click", (e) => { e.stopPropagation(); openEditModal(btn.dataset.editBtn); }));
+  body.querySelectorAll("[data-toggle-status]").forEach(btn => btn.addEventListener("click", (e) => { e.stopPropagation(); toggleFileStatus(btn.dataset.toggleStatus); }));
+  body.querySelectorAll("[data-delete-btn]").forEach(btn => btn.addEventListener("click", (e) => { e.stopPropagation(); purgeFile(btn.dataset.deleteBtn); })); // purgeFile = Xóa mềm
 }
 
 function openEditModal(fileId) {
@@ -347,8 +321,7 @@ function renderEditAvailableTagsSelect() {
   const select = document.getElementById("editAvailableTagsSelect");
   if (!select) return;
   const available = allHashtagsData.filter(t => !editSelectedTagsList.includes(t.name));
-  select.innerHTML = '<option value="">-- Chọn hashtag có sẵn --</option>' +
-    available.map(t => `<option value="${escapeHTML(t.name)}">#${escapeHTML(t.name)}</option>`).join('');
+  select.innerHTML = '<option value="">-- Chọn hashtag có sẵn --</option>' + available.map(t => `<option value="${escapeHTML(t.name)}">#${escapeHTML(t.name)}</option>`).join('');
 }
 
 document.getElementById("btnEditAddSelectedTag")?.addEventListener("click", () => {
@@ -371,9 +344,7 @@ document.getElementById("btnEditAddCustomTag")?.addEventListener("click", () => 
   }
 });
 
-document.querySelectorAll("[data-close-edit]").forEach(el => {
-  el.addEventListener("click", () => document.getElementById("editFileModal").classList.remove("open"));
-});
+document.querySelectorAll("[data-close-edit]").forEach(el => el.addEventListener("click", () => document.getElementById("editFileModal").classList.remove("open")));
 
 document.getElementById("editFileForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -389,12 +360,9 @@ document.getElementById("editFileForm")?.addEventListener("submit", async (e) =>
   submitBtn.textContent = "⏳ Đang lưu...";
 
   try {
-    const { error: updateError } = await supabaseClient
-      .from("file")
-      .update({ file_name: newName, id_folder: newFolderId, bio: newBio })
-      .eq("id", fileId);
-
+    const { error: updateError } = await supabaseClient.from("file").update({ file_name: newName, id_folder: newFolderId, bio: newBio }).eq("id", fileId);
     if (updateError) throw updateError;
+
     await supabaseClient.from("file_hashtag").delete().eq("id_file", fileId);
 
     for (const tagName of editSelectedTagsList) {
@@ -434,7 +402,6 @@ async function downloadFileDirectly(fileId) {
 
   const { data, error } = await supabaseClient.storage.from(bucket).createSignedUrl(pathInsideBucket, 300, { download: true });
   if (error || !data?.signedUrl) return showToast("Lỗi tải về", "Không thể lấy đường dẫn tải file.");
-
   window.open(data.signedUrl, "_blank");
 }
 
@@ -448,9 +415,7 @@ async function openPreviewModal(fileId) {
   document.getElementById("prevFileTime").textContent = formatDateTime(file.created_at);
   document.getElementById("prevFileBio").textContent = file.bio || "Không có mô tả.";
 
-  const tagsHtml = (file.file_hashtag || [])
-    .map(fh => fh.hashtag?.name ? `<span class="badge">#${escapeHTML(fh.hashtag.name)}</span>` : '')
-    .join(' ');
+  const tagsHtml = (file.file_hashtag || []).map(fh => fh.hashtag?.name ? `<span class="badge">#${escapeHTML(fh.hashtag.name)}</span>` : '').join(' ');
   document.getElementById("prevFileTags").innerHTML = tagsHtml || '-';
 
   let bucket = "documents";
@@ -497,135 +462,11 @@ async function openPreviewModal(fileId) {
 
 document.querySelectorAll("[data-close-preview]").forEach(el => el.addEventListener("click", () => document.getElementById("previewFileModal").classList.remove("open")));
 
-function renderFolderManageList() {
-  const body = document.getElementById("folderManageBody");
-  if (!body) return;
-  body.innerHTML = allFoldersData.map(f => `
-    <tr>
-      <td><strong>${escapeHTML(f.display_name)}</strong></td>
-      <td><code>${escapeHTML(f.bucket_name)}</code></td>
-      <td><button class="action-btn delete" data-delete-folder="${f.id}">⌫</button></td>
-    </tr>
-  `).join('');
-
-  body.querySelectorAll("[data-delete-folder]").forEach(b => b.addEventListener("click", () => deleteFolder(b.dataset.deleteFolder)));
-}
-
-document.getElementById("folderForm")?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const btn = document.getElementById("folderSubmitBtn");
-  const input = document.getElementById("folderDisplayName");
-  const name = input.value.trim();
-  if (!name || btn.disabled) return;
-
-  btn.disabled = true;
-  btn.textContent = "⏳ Đang tạo...";
-
-  try {
-    const bucketName = slugify(name);
-    const { data: newFolder, error } = await supabaseClient
-      .from("folder")
-      .insert({ display_name: name, bucket_name: bucketName, created_by: currentUser.id })
-      .select()
-      .single();
-
-    if (error) throw error;
-    supabaseClient.functions.invoke("create-bucket", { body: { bucketName } });
-
-    allFoldersData.push(newFolder);
-    localStorage.setItem("cache_folders", JSON.stringify(allFoldersData));
-    renderFolderManageList();
-    populateFilterDropdowns();
-
-    showToast("Đã tạo Folder mới", name);
-    input.value = "";
-  } catch (err) {
-    showToast("Không tạo được Folder", err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "+ Thêm Folder";
-  }
-});
-
-async function deleteFolder(id) {
-  if (!confirm("Xóa Folder này?")) return;
-  const { error } = await supabaseClient.from("folder").delete().eq("id", id);
-  if (error) return showToast("Lỗi xóa", "Folder vẫn còn chứa file.");
-
-  allFoldersData = allFoldersData.filter(f => f.id !== id);
-  localStorage.setItem("cache_folders", JSON.stringify(allFoldersData));
-  renderFolderManageList();
-  populateFilterDropdowns();
-  showToast("Đã xóa Folder", "");
-}
-
-function renderHashtagManageList() {
-  const body = document.getElementById("hashtagManageBody");
-  if (!body) return;
-  body.innerHTML = allHashtagsData.map(h => `
-    <tr>
-      <td><strong>#${escapeHTML(h.name)}</strong></td>
-      <td>${formatDate(h.created_at)}</td>
-      <td><button class="action-btn delete" data-delete-hashtag="${h.id}">⌫</button></td>
-    </tr>
-  `).join('');
-
-  body.querySelectorAll("[data-delete-hashtag]").forEach(b => b.addEventListener("click", () => deleteHashtag(b.dataset.deleteHashtag)));
-}
-
-document.getElementById("hashtagForm")?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const btn = document.getElementById("hashtagSubmitBtn");
-  const input = document.getElementById("hashtagName");
-  const name = input.value.trim().replace(/^#/, "");
-  if (!name || btn.disabled) return;
-
-  btn.disabled = true;
-  btn.textContent = "⏳ Đang tạo...";
-
-  try {
-    const { data: newTag, error } = await supabaseClient
-      .from("hashtag")
-      .insert({ name, created_by: currentUser.id })
-      .select()
-      .single();
-
-    if (error) throw error;
-    allHashtagsData.push(newTag);
-    localStorage.setItem("cache_hashtags", JSON.stringify(allHashtagsData));
-    renderHashtagManageList();
-    renderAvailableTagsSelect();
-    renderHashtagFilterContainer();
-    populateFilterDropdowns();
-
-    showToast("Đã tạo Hashtag mới", `#${name}`);
-    input.value = "";
-  } catch (err) {
-    showToast("Không tạo được Hashtag", err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "+ Thêm Hashtag";
-  }
-});
-
-async function deleteHashtag(id) {
-  if (!confirm("Xóa Hashtag này?")) return;
-  await supabaseClient.from("hashtag").delete().eq("id", id);
-  allHashtagsData = allHashtagsData.filter(h => h.id !== id);
-  localStorage.setItem("cache_hashtags", JSON.stringify(allHashtagsData));
-  renderHashtagManageList();
-  renderAvailableTagsSelect();
-  renderHashtagFilterContainer();
-  populateFilterDropdowns();
-  showToast("Đã xóa Hashtag", "");
-}
-
 function renderAvailableTagsSelect() {
   const select = document.getElementById("availableTagsSelect");
   if (!select) return;
   const available = allHashtagsData.filter(t => !selectedTagsList.includes(t.name));
-  select.innerHTML = '<option value="">-- Chọn hashtag có sẵn --</option>' +
-    available.map(t => `<option value="${escapeHTML(t.name)}">#${escapeHTML(t.name)}</option>`).join('');
+  select.innerHTML = '<option value="">-- Chọn hashtag có sẵn --</option>' + available.map(t => `<option value="${escapeHTML(t.name)}">#${escapeHTML(t.name)}</option>`).join('');
 }
 
 function renderSelectedTagsBox() {
@@ -635,17 +476,12 @@ function renderSelectedTagsBox() {
     box.innerHTML = '<span style="color:var(--text-faint); font-size:0.8rem;">Chưa chọn hashtag nào</span>';
     return;
   }
-  box.innerHTML = selectedTagsList.map((tag, idx) => `
-    <span class="tag-chip">#${escapeHTML(tag)} <button type="button" data-remove-tag="${idx}">✕</button></span>
-  `).join('');
-
-  box.querySelectorAll("[data-remove-tag]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      selectedTagsList.splice(parseInt(btn.dataset.removeTag), 1);
-      renderSelectedTagsBox();
-      renderAvailableTagsSelect();
-    });
-  });
+  box.innerHTML = selectedTagsList.map((tag, idx) => `<span class="tag-chip">#${escapeHTML(tag)} <button type="button" data-remove-tag="${idx}">✕</button></span>`).join('');
+  box.querySelectorAll("[data-remove-tag]").forEach(btn => btn.addEventListener("click", () => {
+    selectedTagsList.splice(parseInt(btn.dataset.removeTag), 1);
+    renderSelectedTagsBox();
+    renderAvailableTagsSelect();
+  }));
 }
 
 document.getElementById("btnAddSelectedTag")?.addEventListener("click", () => {
@@ -802,10 +638,116 @@ async function deleteUser(id) {
   showToast("Đã xóa user", "");
 }
 
+function renderFolderManageList() {
+  const body = document.getElementById("folderManageBody");
+  if (!body) return;
+  body.innerHTML = allFoldersData.map(f => `
+    <tr>
+      <td><strong>${escapeHTML(f.display_name)}</strong></td>
+      <td><code>${escapeHTML(f.bucket_name)}</code></td>
+      <td><button class="action-btn delete" data-delete-folder="${f.id}">⌫</button></td>
+    </tr>
+  `).join('');
+  body.querySelectorAll("[data-delete-folder]").forEach(b => b.addEventListener("click", () => deleteFolder(b.dataset.deleteFolder)));
+}
+
+document.getElementById("folderForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById("folderSubmitBtn");
+  const input = document.getElementById("folderDisplayName");
+  const name = input.value.trim();
+  if (!name || btn.disabled) return;
+
+  btn.disabled = true;
+  btn.textContent = "⏳ Đang tạo...";
+  try {
+    const bucketName = slugify(name);
+    const { data: newFolder, error } = await supabaseClient.from("folder").insert({ display_name: name, bucket_name: bucketName, created_by: currentUser.id }).select().single();
+    if (error) throw error;
+
+    supabaseClient.functions.invoke("create-bucket", { body: { bucketName } });
+    allFoldersData.push(newFolder);
+    localStorage.setItem("cache_folders", JSON.stringify(allFoldersData));
+    renderFolderManageList();
+    populateFilterDropdowns();
+    showToast("Đã tạo Folder mới", name);
+    input.value = "";
+  } catch (err) {
+    showToast("Không tạo được Folder", err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "+ Thêm Folder";
+  }
+});
+
+async function deleteFolder(id) {
+  if (!confirm("Xóa Folder này?")) return;
+  const { error } = await supabaseClient.from("folder").delete().eq("id", id);
+  if (error) return showToast("Lỗi xóa", "Folder vẫn còn chứa file.");
+  allFoldersData = allFoldersData.filter(f => f.id !== id);
+  localStorage.setItem("cache_folders", JSON.stringify(allFoldersData));
+  renderFolderManageList();
+  populateFilterDropdowns();
+  showToast("Đã xóa Folder", "");
+}
+
+function renderHashtagManageList() {
+  const body = document.getElementById("hashtagManageBody");
+  if (!body) return;
+  body.innerHTML = allHashtagsData.map(h => `
+    <tr>
+      <td><strong>#${escapeHTML(h.name)}</strong></td>
+      <td>${formatDate(h.created_at)}</td>
+      <td><button class="action-btn delete" data-delete-hashtag="${h.id}">⌫</button></td>
+    </tr>
+  `).join('');
+  body.querySelectorAll("[data-delete-hashtag]").forEach(b => b.addEventListener("click", () => deleteHashtag(b.dataset.deleteHashtag)));
+}
+
+document.getElementById("hashtagForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById("hashtagSubmitBtn");
+  const input = document.getElementById("hashtagName");
+  const name = input.value.trim().replace(/^#/, "");
+  if (!name || btn.disabled) return;
+
+  btn.disabled = true;
+  btn.textContent = "⏳ Đang tạo...";
+  try {
+    const { data: newTag, error } = await supabaseClient.from("hashtag").insert({ name, created_by: currentUser.id }).select().single();
+    if (error) throw error;
+
+    allHashtagsData.push(newTag);
+    localStorage.setItem("cache_hashtags", JSON.stringify(allHashtagsData));
+    renderHashtagManageList();
+    renderAvailableTagsSelect();
+    renderHashtagFilterContainer();
+    populateFilterDropdowns();
+    showToast("Đã tạo Hashtag mới", `#${name}`);
+    input.value = "";
+  } catch (err) {
+    showToast("Không tạo được Hashtag", err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "+ Thêm Hashtag";
+  }
+});
+
+async function deleteHashtag(id) {
+  if (!confirm("Xóa Hashtag này?")) return;
+  await supabaseClient.from("hashtag").delete().eq("id", id);
+  allHashtagsData = allHashtagsData.filter(h => h.id !== id);
+  localStorage.setItem("cache_hashtags", JSON.stringify(allHashtagsData));
+  renderHashtagManageList();
+  renderAvailableTagsSelect();
+  renderHashtagFilterContainer();
+  populateFilterDropdowns();
+  showToast("Đã xóa Hashtag", "");
+}
+
 async function loadLeaderboard() {
   const { data } = await supabaseClient.from("user").select("user_name, score").order("score", { ascending: false }).limit(20);
   const users = data || [];
-
   const podiumBox = document.getElementById("podiumTop3");
   const restBody = document.getElementById("leaderboardRestBody");
 
@@ -817,18 +759,11 @@ async function loadLeaderboard() {
   if (top2) podiumHtml += `<div class="podium-card rank-2"><div class="podium-badge">2</div><div class="podium-avatar">${escapeHTML(top2.user_name.slice(0, 2).toUpperCase())}</div><strong>${escapeHTML(top2.user_name)}</strong><p style="color:var(--text-sub); font-size:0.85rem; margin-top:0.3rem;">${top2.score || 0} tài liệu</p></div>`;
   if (top1) podiumHtml += `<div class="podium-card rank-1"><div class="podium-badge">1</div><div class="podium-avatar">${escapeHTML(top1.user_name.slice(0, 2).toUpperCase())}</div><strong style="font-size:1.05rem;">${escapeHTML(top1.user_name)}</strong><p style="color:#f59e0b; font-weight:700; margin-top:0.3rem;">${top1.score || 0} tài liệu</p></div>`;
   if (top3) podiumHtml += `<div class="podium-card rank-3"><div class="podium-badge">3</div><div class="podium-avatar">${escapeHTML(top3.user_name.slice(0, 2).toUpperCase())}</div><strong>${escapeHTML(top3.user_name)}</strong><p style="color:var(--text-sub); font-size:0.85rem; margin-top:0.3rem;">${top3.score || 0} tài liệu</p></div>`;
-
   podiumBox.innerHTML = podiumHtml;
 
   const restUsers = users.slice(3);
   if (restBody) {
-    restBody.innerHTML = restUsers.map((u, i) => `
-      <tr>
-        <td><strong>#${i + 4}</strong></td>
-        <td>${escapeHTML(u.user_name)}</td>
-        <td><strong>${u.score || 0}</strong> tài liệu</td>
-      </tr>
-    `).join('');
+    restBody.innerHTML = restUsers.map((u, i) => `<tr><td><strong>#${i + 4}</strong></td><td>${escapeHTML(u.user_name)}</td><td><strong>${u.score || 0}</strong> tài liệu</td></tr>`).join('');
   }
 }
 
@@ -849,60 +784,33 @@ async function loadHistory() {
 
   const body = document.getElementById("historyTableBody");
   if (body) {
-    body.innerHTML = merged.map(h => `
-      <tr>
-        <td>${formatDateTime(h.time)}</td>
-        <td>${escapeHTML(h.target)}</td>
-        <td>${escapeHTML(h.actor)}</td>
-        <td>${escapeHTML(h.action)}</td>
-      </tr>
-    `).join('');
+    body.innerHTML = merged.map(h => `<tr><td>${formatDateTime(h.time)}</td><td>${escapeHTML(h.target)}</td><td>${escapeHTML(h.actor)}</td><td>${escapeHTML(h.action)}</td></tr>`).join('');
   }
 }
 
 async function loadSettings() {
   try {
-    const { data: siteData } = await supabaseClient
-      .from("site_settings")
-      .select("*")
-      .eq("id", 1)
-      .maybeSingle();
-
+    const { data: siteData } = await supabaseClient.from("site_settings").select("*").eq("id", 1).maybeSingle();
     if (siteData) {
       if (document.getElementById("settingSiteName")) document.getElementById("settingSiteName").value = siteData.site_name || "";
       if (document.getElementById("settingSiteLogo")) document.getElementById("settingSiteLogo").value = siteData.site_logo || "";
-      if (document.getElementById("settingTrashDays")) document.getElementById("settingTrashDays").value = siteData.trash_retention_days || 30;
       applyBrandSettings(siteData.site_name, siteData.site_logo);
     }
-
-    const { data: contactData } = await supabaseClient
-      .from("site_setting")
-      .select("phone, email, facebook")
-      .eq("id", 1)
-      .maybeSingle();
-
+    const { data: contactData } = await supabaseClient.from("site_setting").select("phone, email, facebook").eq("id", 1).maybeSingle();
     if (contactData) {
       if (document.getElementById("settingPhone")) document.getElementById("settingPhone").value = contactData.phone || "";
       if (document.getElementById("settingEmail")) document.getElementById("settingEmail").value = contactData.email || "";
       if (document.getElementById("settingFacebook")) document.getElementById("settingFacebook").value = contactData.facebook || "";
     }
-  } catch (err) {
-    console.error("Lỗi tải cài đặt:", err.message);
-  }
+  } catch (err) { console.error("Lỗi tải cài đặt:", err.message); }
 }
 
 function applyBrandSettings(siteName, siteLogo) {
   const brandEl = document.querySelector(".brand");
   if (!brandEl) return;
-
   const brandMark = brandEl.querySelector(".brand-mark");
   const brandTitle = brandEl.querySelector("strong");
-
-  if (brandTitle && siteName) {
-    brandTitle.textContent = siteName;
-    document.title = `${siteName} - Admin Panel`;
-  }
-
+  if (brandTitle && siteName) { brandTitle.textContent = siteName; document.title = `${siteName} - Admin Panel`; }
   if (brandMark && siteLogo) {
     if (siteLogo.startsWith("http://") || siteLogo.startsWith("https://")) {
       brandMark.innerHTML = `<img src="${escapeHTML(siteLogo)}" alt="Logo" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;">`;
@@ -915,22 +823,12 @@ function applyBrandSettings(siteName, siteLogo) {
 async function saveSiteSettings() {
   const siteName = document.getElementById("settingSiteName")?.value.trim();
   const siteLogo = document.getElementById("settingSiteLogo")?.value.trim();
-  const trashDays = parseInt(document.getElementById("settingTrashDays")?.value) || 30;
-
   try {
-    const { error } = await supabaseClient.from("site_settings").upsert({
-      id: 1,
-      site_name: siteName,
-      site_logo: siteLogo,
-      trash_retention_days: trashDays
-    });
-
+    const { error } = await supabaseClient.from("site_settings").upsert({ id: 1, site_name: siteName, site_logo: siteLogo });
     if (error) throw error;
     applyBrandSettings(siteName, siteLogo);
     showToast("Đã lưu cấu hình hệ thống", "");
-  } catch (err) {
-    showToast("Lỗi lưu cấu hình", err.message);
-  }
+  } catch (err) { showToast("Lỗi lưu cấu hình", err.message); }
 }
 
 document.getElementById("settingsForm")?.addEventListener("submit", async (e) => {
@@ -951,46 +849,50 @@ document.getElementById("accountForm")?.addEventListener("submit", async (e) => 
   const name = document.getElementById("accountNewName").value.trim();
   const pass = document.getElementById("accountNewPassword").value;
   const currPass = document.getElementById("accountCurrentPassword").value;
-
   const { error } = await supabaseClient.auth.signInWithPassword({ email: currentUser.email, password: currPass });
   if (error) return showToast("Thất bại", "Mật khẩu hiện tại không đúng.");
-
   if (name) await supabaseClient.from("user").update({ user_name: name }).eq("id", currentUser.id);
   if (pass) await supabaseClient.auth.updateUser({ password: pass });
-
   showToast("Cập nhật thành công!", "");
   document.getElementById("accountForm").reset();
 });
 
-async function toggleFileStatus(id) {
-  const file = allFilesData.find(f => f.id === id);
-  if (!file) return;
-  await supabaseClient.from("file").update({ status: !file.status }).eq("id", id);
-  file.status = !file.status;
-  localStorage.setItem("cache_admin_files", JSON.stringify(allFilesData));
-  renderFileTable();
-  showToast("Đã cập nhật trạng thái", "");
-}
 
+// -------------------------------------------------------------------------
+// TÍNH NĂNG THÙNG RÁC CHO ADMIN
+// -------------------------------------------------------------------------
+
+// 1. Chuyển file vào Thùng rác (Xóa mềm - Soft Delete)
 async function purgeFile(id) {
   if (!confirm("Bạn có chắc muốn chuyển tài liệu này vào Thùng rác?")) return;
+
   const { error } = await supabaseClient
     .from("file")
     .update({ is_deleted: true, deleted_at: new Date().toISOString() })
     .eq("id", id);
 
-  if (error) return showToast("Lỗi", error.message);
+  if (error) {
+    alert("Lỗi: " + error.message);
+    return;
+  }
+
   await loadAllFiles();
   renderFileTable();
   showToast("Đã chuyển vào Thùng rác", "");
 }
 
+// 2. Tải danh sách Thùng rác hệ thống dành cho Admin
 async function loadAdminTrashBin() {
-  const { data } = await supabaseClient
+  const { data, error } = await supabaseClient
     .from("file")
-    .select("id, file_name, storage_path, deleted_at, id_user, folder:id_folder(display_name, bucket_name), user:id_user(user_name)")
+    .select("id, file_name, storage_path, deleted_at, id_user, folder(display_name, bucket_name), user(user_name)")
     .eq("is_deleted", true)
     .order("deleted_at", { ascending: false });
+
+  if (error) {
+    console.error("Lỗi tải thùng rác:", error);
+    return;
+  }
 
   const trashList = data || [];
   const emptyEl = document.getElementById("adminTrashEmptyState");
@@ -1008,14 +910,15 @@ async function loadAdminTrashBin() {
       <td>${formatDateTime(file.deleted_at)}</td>
       <td>
         <div class="actions">
-          <button class="action-btn" onclick="restoreFileFromTrash('${file.id}')" title="Khôi phục">↺</button>
-          <button class="action-btn delete" onclick="hardDeleteFile('${file.id}', '${file.folder?.bucket_name || 'documents'}', '${file.storage_path}')" title="Xóa vĩnh viễn">⌫</button>
+          <button class="action-btn" onclick="restoreFileFromTrash('${file.id}')" title="Khôi phục">↺ Khôi phục</button>
+          <button class="action-btn delete" onclick="hardDeleteFile('${file.id}', '${file.folder?.bucket_name || 'documents'}', '${file.storage_path}')" title="Xóa vĩnh viễn">⌫ Xóa vĩnh viễn</button>
         </div>
       </td>
     </tr>
   `).join('');
 }
 
+// 3. Khôi phục file từ Thùng rác về danh sách chính
 async function restoreFileFromTrash(id) {
   await supabaseClient.from("file").update({ is_deleted: false, deleted_at: null }).eq("id", id);
   showToast("Đã khôi phục tài liệu", "");
@@ -1023,6 +926,7 @@ async function restoreFileFromTrash(id) {
   await loadAllFiles();
 }
 
+// 4. Xóa vĩnh viễn file khỏi CSDL & Storage (Chỉ dành cho Admin)
 async function hardDeleteFile(id, bucket, storagePath) {
   if (!confirm("CẢNH BÁO: Xóa vĩnh viễn sẽ mất hoàn toàn file và không thể khôi phục. Tiếp tục?")) return;
   const cleanPath = storagePath.replace(`${bucket}/`, "");
@@ -1050,15 +954,12 @@ function switchPage(p) {
   if (activeEl) activeEl.classList.add("active");
   if (elBreadcrumbCurrent) elBreadcrumbCurrent.textContent = pageTitles[targetPage];
   if (elSidebar) elSidebar.classList.remove("open");
-  if (window.location.hash !== `#${targetPage}`) {
-    history.pushState(null, "", `#${targetPage}`);
-  }
+  if (window.location.hash !== `#${targetPage}`) { history.pushState(null, "", `#${targetPage}`); }
 }
 
 function restorePageFromHash() {
   const saved = window.location.hash.replace("#", "");
-  if (saved && pageTitles[saved]) switchPage(saved);
-  else switchPage("files");
+  if (saved && pageTitles[saved]) switchPage(saved); else switchPage("files");
 }
 
 function showToast(t, m) { clearTimeout(toastTimer); document.getElementById("toastTitle").textContent = t; document.getElementById("toastMessage").textContent = m; document.getElementById("toast").classList.add("show"); toastTimer = setTimeout(() => document.getElementById("toast").classList.remove("show"), 2800); }
