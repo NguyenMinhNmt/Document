@@ -669,14 +669,25 @@ document.getElementById("logoutBtn")?.addEventListener("click", async () => {
 });
 
 function switchPage(p) {
-  const targetPage = pageTitles[p] ? p : "documents";
+  const targetPage = pageTitles[p] ? p : "documents"; // Mặc định là documents cho user
+
+  // 1. Cập nhật giao diện (Menu active & Hiển thị khối)
   document.querySelectorAll(".nav-item").forEach(i => i.classList.toggle("active", i.dataset.page === targetPage));
   document.querySelectorAll(".page").forEach(s => s.classList.remove("active"));
+
   const activeEl = document.getElementById(`${targetPage}Page`);
   if (activeEl) activeEl.classList.add("active");
+
   if (elBreadcrumbCurrent) elBreadcrumbCurrent.textContent = pageTitles[targetPage];
   if (elSidebar) elSidebar.classList.remove("open");
-  if (window.location.hash !== `#${targetPage}`) { history.pushState(null, "", `#${targetPage}`); }
+
+  // 2. Cập nhật URL
+  if (window.location.hash !== `#${targetPage}`) {
+    history.pushState(null, "", `#${targetPage}`);
+  }
+
+  // 3. TỰ ĐỘNG TẢI DỮ LIỆU CỦA TAB ĐÓ MÀ KHÔNG CẦN F5
+  revalidateTabData(targetPage);
 }
 
 function restorePageFromHash() {
