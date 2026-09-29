@@ -746,24 +746,65 @@ async function deleteHashtag(id) {
 }
 
 async function loadLeaderboard() {
-  const { data } = await supabaseClient.from("user").select("user_name, score").order("score", { ascending: false }).limit(20);
-  const users = data || [];
+  // 1. Đảm bảo đã tải đầy đủ danh sách user và file mới nhất
+  await Promise.all([loadUsersList(), loadAllFiles()]);
+
+  if (!allUsersData || allUsersData.length === 0) return;
+
+  // 2. Tính toán điểm số trực tiếp dựa trên số file thực tế
+  const userStats = allUsersData.map(user => {
+    // Chỉ đếm những file thuộc về user, không bị xóa và đang hoạt động (Được duyệt)
+    const userFiles = allFilesData.filter(f => f.id_user === user.id && !f.is_deleted && f.status);
+    const fileCount = userFiles.length;
+
+    // Xác định thời điểm họ đạt được số lượng file này (thời gian up file mới nhất của họ)
+    // Vì allFilesData đã được sắp xếp mới nhất ở trên cùng, nên file đầu tiên (index 0) chính là mốc thời gian đó
+    let reachedTime = 0;
+    if (fileCount > 0) {
+      reachedTime = new Date(userFiles[0].created_at).getTime();
+    }
+
+    return {
+      user_name: user.user_name,
+      score: fileCount,
+      reachedTime: reachedTime
+    };
+  });
+
+  // 3. THUẬT TOÁN XẾP HẠNG THÔNG MINH
+  userStats.sort((a, b) => {
+    // Ưu tiên 1: Ai nhiều file hơn thì xếp trên (Sắp xếp giảm dần)
+    if (b.score !== a.score) {
+      return b.score - a.score;
+    }
+    // Ưu tiên 2 (Tie-breaker): Nếu số file bằng nhau và > 0, ai đạt được số file này trước (thời gian nhỏ hơn) thì xếp trên
+    if (a.score > 0) {
+      return a.reachedTime - b.reachedTime;
+    }
+    return 0; // Nếu cùng 0 file thì đứng ngang nhau
+  });
+
+  // Cắt lấy Top 20 người xuất sắc nhất
+  const users = userStats.slice(0, 10);
+
   const podiumBox = document.getElementById("podiumTop3");
   const restBody = document.getElementById("leaderboardRestBody");
 
   if (!podiumBox) return;
-  if (users.length === 0) { podiumBox.innerHTML = '<p>Chưa có dữ liệu</p>'; return; }
+  if (users.length === 0) { podiumBox.innerHTML = '<p>Chưa có dữ liệu xếp hạng</p>'; return; }
 
   const top1 = users[0], top2 = users[1], top3 = users[2];
   let podiumHtml = '';
-  if (top2) podiumHtml += `<div class="podium-card rank-2"><div class="podium-badge">2</div><div class="podium-avatar">${escapeHTML(top2.user_name.slice(0, 2).toUpperCase())}</div><strong>${escapeHTML(top2.user_name)}</strong><p style="color:var(--text-sub); font-size:0.85rem; margin-top:0.3rem;">${top2.score || 0} tài liệu</p></div>`;
-  if (top1) podiumHtml += `<div class="podium-card rank-1"><div class="podium-badge">1</div><div class="podium-avatar">${escapeHTML(top1.user_name.slice(0, 2).toUpperCase())}</div><strong style="font-size:1.05rem;">${escapeHTML(top1.user_name)}</strong><p style="color:#f59e0b; font-weight:700; margin-top:0.3rem;">${top1.score || 0} tài liệu</p></div>`;
-  if (top3) podiumHtml += `<div class="podium-card rank-3"><div class="podium-badge">3</div><div class="podium-avatar">${escapeHTML(top3.user_name.slice(0, 2).toUpperCase())}</div><strong>${escapeHTML(top3.user_name)}</strong><p style="color:var(--text-sub); font-size:0.85rem; margin-top:0.3rem;">${top3.score || 0} tài liệu</p></div>`;
+
+  if (top2) podiumHtml += `<div class="podium-card rank-2"><div class="podium-badge">2</div><div class="podium-avatar">${escapeHTML(top2.user_name.slice(0, 2).toUpperCase())}</div><strong>${escapeHTML(top2.user_name)}</strong><p style="color:var(--text-sub); font-size:0.85rem; margin-top:0.3rem;">${top2.score} tài liệu</p></div>`;
+  if (top1) podiumHtml += `<div class="podium-card rank-1"><div class="podium-badge">1</div><div class="podium-avatar">${escapeHTML(top1.user_name.slice(0, 2).toUpperCase())}</div><strong style="font-size:1.05rem;">${escapeHTML(top1.user_name)}</strong><p style="color:#f59e0b; font-weight:700; margin-top:0.3rem;">${top1.score} tài liệu</p></div>`;
+  if (top3) podiumHtml += `<div class="podium-card rank-3"><div class="podium-badge">3</div><div class="podium-avatar">${escapeHTML(top3.user_name.slice(0, 2).toUpperCase())}</div><strong>${escapeHTML(top3.user_name)}</strong><p style="color:var(--text-sub); font-size:0.85rem; margin-top:0.3rem;">${top3.score} tài liệu</p></div>`;
+
   podiumBox.innerHTML = podiumHtml;
 
-  const restUsers = users.slice(3);
   if (restBody) {
-    restBody.innerHTML = restUsers.map((u, i) => `<tr><td><strong>#${i + 4}</strong></td><td>${escapeHTML(u.user_name)}</td><td><strong>${u.score || 0}</strong> tài liệu</td></tr>`).join('');
+    const restUsers = users.slice(3);
+    restBody.innerHTML = restUsers.map((u, i) => `<tr><td><strong>#${i + 4}</strong></td><td>${escapeHTML(u.user_name)}</td><td><strong>${u.score}</strong> tài liệu</td></tr>`).join('');
   }
 }
 
