@@ -783,7 +783,7 @@ async function loadLeaderboard() {
 
   // 3. THUẬT TOÁN XẾP HẠNG THÔNG MINH
   userStats.sort((a, b) => {
-    // Ưu tiên 1: Ai nhiều file hơn thì xếp trên (Sắp xếp giảm dần)
+    // Ưu tiên 1: Ai nhiềufile hơn thì xếp trên (Sắp xếp giảm dần)
     if (b.score !== a.score) {
       return b.score - a.score;
     }
