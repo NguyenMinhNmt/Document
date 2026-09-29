@@ -226,6 +226,10 @@ function renderDocTable() {
 
   body.innerHTML = filtered.map((file, idx) => {
     const isOwner = file.id_user === currentUser?.id;
+    const statusBadge = file.status
+      ? `<span class="status active">Hoạt động</span>`
+      : `<span class="status inactive">Đã ẩn</span>`;
+
     const tagsHtml = (file.file_hashtag || [])
       .map(fh => fh.hashtag?.name ? `<span class="badge">#${escapeHTML(fh.hashtag.name)}</span>` : '')
       .join(' ') || '-';
@@ -237,11 +241,13 @@ function renderDocTable() {
         <td>${escapeHTML(file.folder?.display_name || "-")}</td>
         <td>${tagsHtml}</td>
         <td>${escapeHTML(file.user?.user_name || "-")}</td>
+        <td>${statusBadge}</td>
         <td>${formatDate(file.created_at)}</td>
         <td onclick="event.stopPropagation();">
           <div class="actions">
             <button class="action-btn" data-download-btn="${file.id}" title="Tải về trực tiếp">⬇</button>
             ${isOwner ? `<button class="action-btn" data-edit-btn="${file.id}" title="Chỉnh sửa tài liệu">✏</button>` : ''}
+            ${isOwner ? `<button class="action-btn" data-toggle-user-status="${file.id}" title="${file.status ? 'Ẩn tài liệu' : 'Hiện tài liệu'}">${file.status ? '🚫' : '↺'}</button>` : ''}
             ${isOwner ? `<button class="action-btn delete" data-delete-btn="${file.id}" title="Chuyển vào thùng rác">⌫</button>` : ''}
           </div>
         </td>
@@ -251,8 +257,7 @@ function renderDocTable() {
   body.querySelectorAll("tr[data-file-id]").forEach(row => row.addEventListener("click", () => openPreviewModal(row.dataset.fileId)));
   body.querySelectorAll("[data-download-btn]").forEach(btn => btn.addEventListener("click", (e) => { e.stopPropagation(); downloadFileDirectly(btn.dataset.downloadBtn); }));
   body.querySelectorAll("[data-edit-btn]").forEach(btn => btn.addEventListener("click", (e) => { e.stopPropagation(); openEditModal(btn.dataset.editBtn); }));
-
-  // Nút xóa gọi hàm deleteFile (đã được sửa thành xóa mềm)
+  body.querySelectorAll("[data-toggle-user-status]").forEach(btn => btn.addEventListener("click", (e) => { e.stopPropagation(); toggleUserFileStatus(btn.dataset.toggleUserStatus); }));
   body.querySelectorAll("[data-delete-btn]").forEach(btn => btn.addEventListener("click", (e) => { e.stopPropagation(); deleteFile(btn.dataset.deleteBtn); }));
 }
 
@@ -749,4 +754,28 @@ function initThemeToggle(isDark) {
     document.documentElement.dataset.theme = toggle.checked ? "dark" : "light";
     await supabaseClient.from("user").update({ color: toggle.checked }).eq("id", currentUser.id);
   });
+}
+async function toggleUserFileStatus(id) {
+  const file = allFilesData.find(f => f.id === id);
+  if (!file || file.id_user !== currentUser?.id) return;
+
+  try {
+    const { error } = await supabaseClient
+      .from("file")
+      .update({ status: !file.status })
+      .eq("id", id)
+      .eq("id_user", currentUser.id); // Bảo mật tuyệt đối: chỉ chủ nhân mới đổi được
+
+    if (error) {
+      alert("❌ Lỗi cập nhật trạng thái: " + error.message);
+      return;
+    }
+
+    file.status = !file.status;
+    localStorage.setItem("cache_files", JSON.stringify(allFilesData));
+    renderDocTable();
+    showToast("Thành công", "Đã cập nhật trạng thái tài liệu của bạn");
+  } catch (err) {
+    alert("❌ Lỗi hệ thống: " + err.message);
+  }
 }
