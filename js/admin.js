@@ -57,7 +57,8 @@ async function bootstrapAdminPage() {
     name: profile.user_name || "Admin",
     email: session.user.email,
     isAdmin: true,
-    isSuperAdmin: !!profile.is_super_admin
+    isSuperAdmin: !!profile.is_super_admin,
+    avatar_url: profile.avatar_url || "" // Lưu link avatar vào biến currentUser
   };
 
   if (elUserNameLabel) elUserNameLabel.textContent = currentUser.name + (currentUser.isSuperAdmin ? " (Super Admin)" : "");
@@ -69,6 +70,7 @@ async function bootstrapAdminPage() {
 
   const currentTab = window.location.hash.replace("#", "") || "files";
   revalidateTabData(currentTab);
+  renderAvatarUI(currentUser.avatar_url, currentUser.name);
 }
 
 window.addEventListener("hashchange", () => {

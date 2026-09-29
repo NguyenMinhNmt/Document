@@ -48,9 +48,15 @@ async function bootstrapUserPage() {
   }
   if (profile.is_admin) { window.location.href = "admin.html"; return; }
 
-  currentUser = { id: session.user.id, name: profile.user_name || "Người dùng", email: session.user.email };
+  currentUser = {
+    id: session.user.id,
+    name: profile.user_name || "Người dùng",
+    email: session.user.email,
+    avatar_url: profile.avatar_url || ""
+  };
+
   if (elUserNameLabel) elUserNameLabel.textContent = currentUser.name;
-  if (elUserAvatar) elUserAvatar.textContent = currentUser.name.slice(0, 2).toUpperCase();
+  renderAvatarUI(currentUser.avatar_url, currentUser.name);
 
   initThemeToggle(profile.color);
   await loadUserSiteBrand();
