@@ -976,3 +976,28 @@ function initThemeToggle(isDark) {
     await supabaseClient.from("user").update({ color: toggle.checked }).eq("id", currentUser.id);
   });
 }
+async function toggleFileStatus(id) {
+  const file = allFilesData.find(f => f.id === id);
+  if (!file) return;
+
+  try {
+    // Gửi lệnh cập nhật trạng thái xuống Database
+    const { error } = await supabaseClient
+      .from("file")
+      .update({ status: !file.status })
+      .eq("id", id);
+
+    if (error) {
+      alert("❌ Lỗi từ Database: Không thể cập nhật trạng thái. Cụ thể: " + error.message);
+      return;
+    }
+
+    // Nếu lưu Database thành công thì mới cập nhật giao diện
+    file.status = !file.status;
+    localStorage.setItem("cache_admin_files", JSON.stringify(allFilesData));
+    renderFileTable();
+    showToast("Thành công", "Đã cập nhật trạng thái tài liệu");
+  } catch (err) {
+    alert("❌ Lỗi hệ thống: " + err.message);
+  }
+}
