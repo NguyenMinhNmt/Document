@@ -898,16 +898,98 @@ document.getElementById("settingsForm")?.addEventListener("submit", async (e) =>
 document.getElementById("accountForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const name = document.getElementById("accountNewName").value.trim();
+  const avatarUrlInput = document.getElementById("accountAvatarUrl")?.value.trim();
+  const avatarFileInput = document.getElementById("accountAvatarFile")?.files[0];
   const pass = document.getElementById("accountNewPassword").value;
+  const confirmPass = document.getElementById("accountConfirmPassword")?.value;
   const currPass = document.getElementById("accountCurrentPassword").value;
-  const { error } = await supabaseClient.auth.signInWithPassword({ email: currentUser.email, password: currPass });
-  if (error) return showToast("Thất bại", "Mật khẩu hiện tại không đúng.");
-  if (name) await supabaseClient.from("user").update({ user_name: name }).eq("id", currentUser.id);
-  if (pass) await supabaseClient.auth.updateUser({ password: pass });
-  showToast("Cập nhật thành công!", "");
-  document.getElementById("accountForm").reset();
-});
+  const submitBtn = document.getElementById("accountSubmitBtn");
 
+  if (pass && confirmPass && pass !== confirmPass) {
+    return showToast("Lỗi", "Mật khẩu mới không trùng khớp.");
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "⏳ Đang cập nhật...";
+
+  try {
+    // 1. Xác thực mật khẩu hiện tại
+    const { error: authError } = await supabaseClient.auth.signInWithPassword({
+      email: currentUser.email,
+      password: currPass
+    });
+    if (authError) throw new Error("Mật khẩu hiện tại không đúng.");
+
+    let finalAvatarUrl = avatarUrlInput || null;
+
+    // 2. Tải ảnh lên Storage nếu người dùng chọn file từ máy
+    if (avatarFileInput) {
+      const safeExt = avatarFileInput.name.split('.').pop();
+      const fileName = `avatars/${currentUser.id}_${Date.now()}.${safeExt}`;
+
+      const { error: uploadError } = await supabaseClient.storage
+        .from("documents")
+        .upload(fileName, avatarFileInput, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabaseClient.storage
+        .from("documents")
+        .getPublicUrl(fileName);
+
+      finalAvatarUrl = publicUrlData.publicUrl;
+    }
+
+    // 3. Chuẩn bị dữ liệu cập nhật
+    const updatePayload = {};
+    if (name) updatePayload.user_name = name;
+    if (finalAvatarUrl !== null && finalAvatarUrl !== "") {
+      updatePayload.avatar_url = finalAvatarUrl;
+    }
+
+    // 4. Gửi lệnh Cập nhật xuống Database và BẮT BẮT LỖI
+    if (Object.keys(updatePayload).length > 0) {
+      const { data, error: dbError } = await supabaseClient
+        .from("user")
+        .update(updatePayload)
+        .eq("id", currentUser.id)
+        .select(); // Thêm .select() để kiểm tra kết quả trả về từ DB
+
+      if (dbError) throw dbError;
+
+      // Nếu DB không trả về dữ liệu nghĩa là RLS đã chặn lệnh UPDATE ngầm
+      if (!data || data.length === 0) {
+        throw new Error("Không thể cập nhật CSDL. Quyền RLS đang khóa cột avatar_url.");
+      }
+    }
+
+    // 5. Đổi mật khẩu tài khoản nếu có nhập
+    if (pass) {
+      const { error: passError } = await supabaseClient.auth.updateUser({ password: pass });
+      if (passError) throw passError;
+    }
+
+    if (name) {
+      currentUser.name = name;
+      if (elUserNameLabel) elUserNameLabel.textContent = name;
+    }
+
+    if (finalAvatarUrl) {
+      currentUser.avatar_url = finalAvatarUrl;
+    }
+
+    renderAvatarUI(currentUser.avatar_url, currentUser.name);
+
+    showToast("Thành công", "Đã cập nhật thông tin tài khoản!");
+    document.getElementById("accountForm").reset();
+
+  } catch (err) {
+    alert("❌ Lỗi cập nhật: " + err.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "✓ Cập nhật tài khoản";
+  }
+});
 
 // -------------------------------------------------------------------------
 // TÍNH NĂNG THÙNG RÁC CHO ADMIN

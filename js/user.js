@@ -625,16 +625,14 @@ document.getElementById("accountForm")?.addEventListener("submit", async (e) => 
   submitBtn.textContent = "⏳ Đang cập nhật...";
 
   try {
-    // 1. Xác thực mật khẩu hiện tại
     const { error: authError } = await supabaseClient.auth.signInWithPassword({
       email: currentUser.email,
       password: currPass
     });
     if (authError) throw new Error("Mật khẩu hiện tại không đúng.");
 
-    let finalAvatarUrl = avatarUrlInput;
+    let finalAvatarUrl = avatarUrlInput || null;
 
-    // 2. Tải ảnh lên Storage nếu có chọn file từ máy
     if (avatarFileInput) {
       const safeExt = avatarFileInput.name.split('.').pop();
       const fileName = `avatars/${currentUser.id}_${Date.now()}.${safeExt}`;
@@ -652,21 +650,25 @@ document.getElementById("accountForm")?.addEventListener("submit", async (e) => 
       finalAvatarUrl = publicUrlData.publicUrl;
     }
 
-    // 3. Cập nhật tên và avatar vào bảng user
     const updatePayload = {};
     if (name) updatePayload.user_name = name;
-    if (finalAvatarUrl) updatePayload.avatar_url = finalAvatarUrl;
-
-    if (Object.keys(updatePayload).length > 0) {
-      const { error: dbError } = await supabaseClient
-        .from("user")
-        .update(updatePayload)
-        .eq("id", currentUser.id);
-
-      if (dbError) throw dbError;
+    if (finalAvatarUrl !== null && finalAvatarUrl !== "") {
+      updatePayload.avatar_url = finalAvatarUrl;
     }
 
-    // 4. Đổi mật khẩu tài khoản nếu có nhập
+    if (Object.keys(updatePayload).length > 0) {
+      const { data, error: dbError } = await supabaseClient
+        .from("user")
+        .update(updatePayload)
+        .eq("id", currentUser.id)
+        .select();
+
+      if (dbError) throw dbError;
+      if (!data || data.length === 0) {
+        throw new Error("Không thể cập nhật CSDL. Quyền RLS đang khóa cột avatar_url.");
+      }
+    }
+
     if (pass) {
       const { error: passError } = await supabaseClient.auth.updateUser({ password: pass });
       if (passError) throw passError;
@@ -677,7 +679,11 @@ document.getElementById("accountForm")?.addEventListener("submit", async (e) => 
       if (elUserNameLabel) elUserNameLabel.textContent = name;
     }
 
-    renderAvatarUI(finalAvatarUrl || currentUser.avatar_url, currentUser.name);
+    if (finalAvatarUrl) {
+      currentUser.avatar_url = finalAvatarUrl;
+    }
+
+    renderAvatarUI(currentUser.avatar_url, currentUser.name);
 
     showToast("Thành công", "Đã cập nhật thông tin tài khoản!");
     document.getElementById("accountForm").reset();
