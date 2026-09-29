@@ -1,5 +1,5 @@
 /* ==========================================================================
-   USER.JS - Tối ưu SWR + Sửa Tên File / Folder / Hashtag (Owner Only)
+   USER.JS - Tối ưu SWR + Quản lý File, Folder, Hashtag, Trash (User)
    ========================================================================== */
 
 const pageTitles = {
@@ -53,6 +53,7 @@ async function bootstrapUserPage() {
   if (elUserAvatar) elUserAvatar.textContent = currentUser.name.slice(0, 2).toUpperCase();
 
   initThemeToggle(profile.color);
+  await loadUserSiteBrand();
   await CommentModule.init("commentRoot", { userId: currentUser.id, isAdmin: false });
 
   const currentTab = window.location.hash.replace("#", "") || "documents";
@@ -130,6 +131,9 @@ async function loadAllFiles() {
     const countEl = document.getElementById("userFileCountLabel");
     if (countEl && currentUser) {
       countEl.textContent = `${allFilesData.filter(f => f.id_user === currentUser.id).length} file đã upload`;
+    }
+    if (window.location.hash.replace("#", "") === "documents" || !window.location.hash) {
+      renderDocTable();
     }
   }
 }
@@ -258,7 +262,6 @@ function renderDocTable() {
   });
 }
 
-/* ================= MODAL SỬA FILE (TÊN FILE, FOLDER, HASHTAGS) ================= */
 function openEditModal(fileId) {
   const file = allFilesData.find(f => f.id === fileId);
   if (!file) return;
@@ -267,11 +270,9 @@ function openEditModal(fileId) {
   document.getElementById("editFileName").value = file.file_name || "";
   document.getElementById("editFileBio").value = file.bio || "";
 
-  // Set dropdown Folders
   const folderSelect = document.getElementById("editFileFolder");
   folderSelect.innerHTML = allFoldersData.map(f => `<option value="${f.id}" ${f.id === file.id_folder ? 'selected' : ''}>${escapeHTML(f.display_name)}</option>`).join('');
 
-  // Lấy danh sách Hashtags của file hiện tại
   editSelectedTagsList = (file.file_hashtag || []).map(fh => fh.hashtag?.name).filter(Boolean);
 
   renderEditSelectedTagsBox();
@@ -334,7 +335,6 @@ document.querySelectorAll("[data-close-edit]").forEach(el => {
   el.addEventListener("click", () => document.getElementById("editFileModal").classList.remove("open"));
 });
 
-// Xử lý Lưu Sửa File
 document.getElementById("editFileForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const fileId = document.getElementById("editFileId").value;
@@ -349,18 +349,14 @@ document.getElementById("editFileForm")?.addEventListener("submit", async (e) =>
   submitBtn.textContent = "⏳ Đang lưu...";
 
   try {
-    // 1. Cập nhật Tên file, Folder, Mô tả trong DB
     const { error: updateError } = await supabaseClient
       .from("file")
       .update({ file_name: newName, id_folder: newFolderId, bio: newBio })
       .eq("id", fileId);
 
     if (updateError) throw updateError;
-
-    // 2. Xóa toàn bộ liên kết Hashtags cũ của file
     await supabaseClient.from("file_hashtag").delete().eq("id_file", fileId);
 
-    // 3. Thêm liên kết Hashtags mới
     for (const tagName of editSelectedTagsList) {
       let { data: tag } = await supabaseClient.from("hashtag").select("id").eq("name", tagName).single();
       if (!tag) {
@@ -375,7 +371,6 @@ document.getElementById("editFileForm")?.addEventListener("submit", async (e) =>
     showToast("Thành công", "Đã cập nhật thông tin tài liệu.");
     document.getElementById("editFileModal").classList.remove("open");
 
-    // Revalidate lại bảng file
     await loadAllFiles();
     renderDocTable();
   } catch (err) {
@@ -605,53 +600,23 @@ async function loadLeaderboard() {
   }
 }
 
-document.getElementById("btnGoToUpload")?.addEventListener("click", () => switchPage("upload"));
-document.addEventListener("click", (e) => { const nav = e.target.closest("[data-page]"); if (nav) switchPage(nav.dataset.page); });
-document.getElementById("menuToggle")?.addEventListener("click", () => elSidebar.classList.toggle("open"));
-document.getElementById("logoutBtn")?.addEventListener("click", async () => {
-  localStorage.clear();
-  await supabaseClient.auth.signOut();
-  window.location.href = "login.html";
+document.getElementById("accountForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = document.getElementById("accountNewName").value.trim();
+  const pass = document.getElementById("accountNewPassword").value;
+  const currPass = document.getElementById("accountCurrentPassword").value;
+
+  const { error } = await supabaseClient.auth.signInWithPassword({ email: currentUser.email, password: currPass });
+  if (error) return showToast("Thất bại", "Mật khẩu hiện tại không đúng.");
+
+  if (name) await supabaseClient.from("user").update({ user_name: name }).eq("id", currentUser.id);
+  if (pass) await supabaseClient.auth.updateUser({ password: pass });
+
+  showToast("Cập nhật thành công!", "");
+  document.getElementById("accountForm").reset();
 });
 
-function switchPage(p) {
-  const targetPage = pageTitles[p] ? p : "documents";
-
-  document.querySelectorAll(".nav-item").forEach(i => i.classList.toggle("active", i.dataset.page === targetPage));
-  document.querySelectorAll(".page").forEach(s => s.classList.remove("active"));
-
-  const activeEl = document.getElementById(`${targetPage}Page`);
-  if (activeEl) activeEl.classList.add("active");
-
-  if (elBreadcrumbCurrent) elBreadcrumbCurrent.textContent = pageTitles[targetPage];
-  if (elSidebar) elSidebar.classList.remove("open");
-
-  if (window.location.hash !== `#${targetPage}`) {
-    history.pushState(null, "", `#${targetPage}`);
-  }
-}
-
-function restorePageFromHash() {
-  const saved = window.location.hash.replace("#", "");
-  if (saved && pageTitles[saved]) switchPage(saved);
-  else switchPage("documents");
-}
-
-function showToast(t, m) { clearTimeout(toastTimer); document.getElementById("toastTitle").textContent = t; document.getElementById("toastMessage").textContent = m; document.getElementById("toast").classList.add("show"); toastTimer = setTimeout(() => document.getElementById("toast").classList.remove("show"), 2800); }
-function formatDate(iso) { return new Date(iso).toLocaleDateString("vi-VN"); }
-function formatDateTime(iso) { return new Date(iso).toLocaleString("vi-VN"); }
-function escapeHTML(v = "") { return String(v).replace(/[&<>'"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c])); }
-function initThemeToggle(isDark) {
-  document.documentElement.dataset.theme = isDark ? "dark" : "light";
-  const toggle = document.getElementById("darkModeToggle");
-  if (!toggle) return;
-  toggle.checked = !!isDark;
-  toggle.addEventListener("change", async () => {
-    document.documentElement.dataset.theme = toggle.checked ? "dark" : "light";
-    await supabaseClient.from("user").update({ color: toggle.checked }).eq("id", currentUser.id);
-  });
-}
-// User xóa mềm (chuyển vào Thùng rác)
+// Chuyển file vào Thùng rác (Xóa mềm)
 async function deleteFile(fileId) {
   if (!confirm("Bạn có muốn chuyển tài liệu này vào Thùng rác?")) return;
   const { error } = await supabaseClient
@@ -702,66 +667,7 @@ async function restoreUserFile(fileId) {
   await loadUserTrashBin();
   await loadAllFiles();
 }
-/* ==========================================================================
-   BỔ SUNG: CHỨC NĂNG THÙNG RÁC CHO USER (KHÔNG XÓA VĨNH VIỄN)
-   ========================================================================== */
 
-// 1. Chuyển file vào Thùng rác (Xóa mềm)
-async function moveToTrash(fileId) {
-  if (!confirm("Bạn có muốn chuyển tài liệu này vào Thùng rác không?")) return;
-
-  try {
-    const { error } = await supabaseClient
-      .from('file')
-      .update({
-        is_deleted: true,
-        deleted_at: new Date().toISOString()
-      })
-      .eq('id', fileId);
-
-    if (error) throw error;
-    alert("✓ Đã chuyển tài liệu vào Thùng rác.");
-    // Bạn có thể gọi hàm load danh sách file cũ của bạn tại đây để cập nhật UI
-  } catch (err) {
-    alert("❌ Lỗi chuyển vào thùng rác: " + err.message);
-  }
-}
-
-// 2. Lấy danh sách file trong Thùng rác của chính User này
-async function getUserTrashFiles(userId) {
-  try {
-    const { data, error } = await supabaseClient
-      .from('file')
-      .select('*')
-      .eq('id_user', userId)
-      .eq('is_deleted', true)
-      .order('deleted_at', { ascending: false });
-
-    if (error) throw error;
-    return data || [];
-  } catch (err) {
-    console.error("Lỗi lấy danh sách thùng rác:", err.message);
-    return [];
-  }
-}
-
-// 3. Khôi phục file từ Thùng rác về danh sách chính
-async function restoreUserFile(fileId) {
-  try {
-    const { error } = await supabaseClient
-      .from('file')
-      .update({
-        is_deleted: false,
-        deleted_at: null
-      })
-      .eq('id', fileId);
-
-    if (error) throw error;
-    alert("✓ Khôi phục tài liệu thành công!");
-  } catch (err) {
-    alert("❌ Lỗi khôi phục: " + err.message);
-  }
-}
 // Tải Cài Đặt Tên & Logo cho giao diện User
 async function loadUserSiteBrand() {
   try {
@@ -796,5 +702,45 @@ async function loadUserSiteBrand() {
   }
 }
 
-// Gọi hàm này trong bootstrapUserPage()
-document.addEventListener("DOMContentLoaded", loadUserSiteBrand);
+document.getElementById("btnGoToUpload")?.addEventListener("click", () => switchPage("upload"));
+document.addEventListener("click", (e) => { const nav = e.target.closest("[data-page]"); if (nav) switchPage(nav.dataset.page); });
+document.getElementById("menuToggle")?.addEventListener("click", () => elSidebar.classList.toggle("open"));
+document.getElementById("logoutBtn")?.addEventListener("click", async () => {
+  localStorage.clear();
+  await supabaseClient.auth.signOut();
+  window.location.href = "login.html";
+});
+
+function switchPage(p) {
+  const targetPage = pageTitles[p] ? p : "documents";
+  document.querySelectorAll(".nav-item").forEach(i => i.classList.toggle("active", i.dataset.page === targetPage));
+  document.querySelectorAll(".page").forEach(s => s.classList.remove("active"));
+  const activeEl = document.getElementById(`${targetPage}Page`);
+  if (activeEl) activeEl.classList.add("active");
+  if (elBreadcrumbCurrent) elBreadcrumbCurrent.textContent = pageTitles[targetPage];
+  if (elSidebar) elSidebar.classList.remove("open");
+  if (window.location.hash !== `#${targetPage}`) {
+    history.pushState(null, "", `#${targetPage}`);
+  }
+}
+
+function restorePageFromHash() {
+  const saved = window.location.hash.replace("#", "");
+  if (saved && pageTitles[saved]) switchPage(saved);
+  else switchPage("documents");
+}
+
+function showToast(t, m) { clearTimeout(toastTimer); document.getElementById("toastTitle").textContent = t; document.getElementById("toastMessage").textContent = m; document.getElementById("toast").classList.add("show"); toastTimer = setTimeout(() => document.getElementById("toast").classList.remove("show"), 2800); }
+function formatDate(iso) { return new Date(iso).toLocaleDateString("vi-VN"); }
+function formatDateTime(iso) { return new Date(iso).toLocaleString("vi-VN"); }
+function escapeHTML(v = "") { return String(v).replace(/[&<>'"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c])); }
+function initThemeToggle(isDark) {
+  document.documentElement.dataset.theme = isDark ? "dark" : "light";
+  const toggle = document.getElementById("darkModeToggle");
+  if (!toggle) return;
+  toggle.checked = !!isDark;
+  toggle.addEventListener("change", async () => {
+    document.documentElement.dataset.theme = toggle.checked ? "dark" : "light";
+    await supabaseClient.from("user").update({ color: toggle.checked }).eq("id", currentUser.id);
+  });
+}

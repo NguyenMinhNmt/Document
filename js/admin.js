@@ -1,5 +1,5 @@
 /* ==========================================================================
-   ADMIN.JS - Tối ưu SWR + Sửa Tên File / Folder / Hashtag cho Tất cả File
+   ADMIN.JS - Tối ưu SWR + Quản lý File, Folder, Hashtag, Settings, Trash
    ========================================================================== */
 
 const pageTitles = {
@@ -33,7 +33,6 @@ const elUserAvatar = document.getElementById("userAvatar");
 
 bootstrapAdminPage();
 
-// CÓ CHỮ async Ở ĐÂY ĐỂ SỬA DỌN SẠCH LỖI DÒNG 33
 async function bootstrapAdminPage() {
   restorePageFromHash();
   renderFromCache();
@@ -143,16 +142,20 @@ async function loadHashtagsList() {
     renderHashtagFilterContainer();
   }
 }
+
 async function loadAllFiles() {
   const { data } = await supabaseClient
     .from("file")
     .select("id, file_name, storage_path, bio, created_at, id_user, id_folder, status, is_deleted, user:id_user(user_name), folder:id_folder(display_name, bucket_name), file_hashtag(hashtag:id_hashtag(id, name))")
-    .or("is_deleted.is.null,is_deleted.eq.false") // Lấy cả file chưa xóa và file cũ chưa gán flag
+    .or("is_deleted.is.null,is_deleted.eq.false")
     .order("created_at", { ascending: false });
 
   if (data) {
     allFilesData = data;
     localStorage.setItem("cache_admin_files", JSON.stringify(data));
+    if (window.location.hash.replace("#", "") === "files" || !window.location.hash) {
+      renderFileTable();
+    }
   }
 }
 
@@ -253,7 +256,7 @@ function renderFileTable() {
             <button class="action-btn" data-download-btn="${file.id}" title="Tải về trực tiếp">⬇</button>
             <button class="action-btn" data-edit-btn="${file.id}" title="Chỉnh sửa tài liệu">✏</button>
             <button class="action-btn" data-toggle-status="${file.id}" title="${file.status ? 'Ẩn' : 'Hiện'}">${file.status ? '🚫' : '↺'}</button>
-            <button class="action-btn delete" data-delete-btn="${file.id}" title="Xóa vĩnh viễn">⌫</button>
+            <button class="action-btn delete" data-delete-btn="${file.id}" title="Xóa">⌫</button>
           </div>
         </td>
       </tr>`;
@@ -292,7 +295,6 @@ function renderFileTable() {
   });
 }
 
-/* ================= MODAL SỬA FILE (ADMIN HAS ALL RIGHTS) ================= */
 function openEditModal(fileId) {
   const file = allFilesData.find(f => f.id === fileId);
   if (!file) return;
@@ -301,11 +303,9 @@ function openEditModal(fileId) {
   document.getElementById("editFileName").value = file.file_name || "";
   document.getElementById("editFileBio").value = file.bio || "";
 
-  // Set dropdown Folders
   const folderSelect = document.getElementById("editFileFolder");
   folderSelect.innerHTML = allFoldersData.map(f => `<option value="${f.id}" ${f.id === file.id_folder ? 'selected' : ''}>${escapeHTML(f.display_name)}</option>`).join('');
 
-  // Lấy danh sách Hashtags của file
   editSelectedTagsList = (file.file_hashtag || []).map(fh => fh.hashtag?.name).filter(Boolean);
 
   renderEditSelectedTagsBox();
@@ -317,16 +317,13 @@ function openEditModal(fileId) {
 function renderEditSelectedTagsBox() {
   const box = document.getElementById("editSelectedTagsBox");
   if (!box) return;
-
   if (editSelectedTagsList.length === 0) {
     box.innerHTML = '<span style="color:var(--text-faint); font-size:0.8rem;">Chưa chọn hashtag nào</span>';
     return;
   }
-
   box.innerHTML = editSelectedTagsList.map((tag, idx) => `
     <span class="tag-chip">#${escapeHTML(tag)} <button type="button" data-remove-edit-tag="${idx}">✕</button></span>
   `).join('');
-
   box.querySelectorAll("[data-remove-edit-tag]").forEach(btn => {
     btn.addEventListener("click", () => {
       editSelectedTagsList.splice(parseInt(btn.dataset.removeEditTag), 1);
@@ -368,7 +365,6 @@ document.querySelectorAll("[data-close-edit]").forEach(el => {
   el.addEventListener("click", () => document.getElementById("editFileModal").classList.remove("open"));
 });
 
-// Xử lý Lưu Sửa File
 document.getElementById("editFileForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const fileId = document.getElementById("editFileId").value;
@@ -383,18 +379,14 @@ document.getElementById("editFileForm")?.addEventListener("submit", async (e) =>
   submitBtn.textContent = "⏳ Đang lưu...";
 
   try {
-    // 1. Cập nhật Tên file, Folder, Mô tả
     const { error: updateError } = await supabaseClient
       .from("file")
       .update({ file_name: newName, id_folder: newFolderId, bio: newBio })
       .eq("id", fileId);
 
     if (updateError) throw updateError;
-
-    // 2. Xóa các Hashtags cũ
     await supabaseClient.from("file_hashtag").delete().eq("id_file", fileId);
 
-    // 3. Thêm các Hashtags mới
     for (const tagName of editSelectedTagsList) {
       let { data: tag } = await supabaseClient.from("hashtag").select("id").eq("name", tagName).single();
       if (!tag) {
@@ -408,8 +400,6 @@ document.getElementById("editFileForm")?.addEventListener("submit", async (e) =>
 
     showToast("Thành công", "Đã cập nhật thông tin tài liệu.");
     document.getElementById("editFileModal").classList.remove("open");
-
-    // Revalidate lại bảng file
     await loadAllFiles();
     renderFileTable();
   } catch (err) {
@@ -426,7 +416,6 @@ async function downloadFileDirectly(fileId) {
 
   let bucket = "documents";
   let pathInsideBucket = file.storage_path;
-
   if (file.storage_path.includes("/")) {
     const parts = file.storage_path.split("/");
     bucket = parts[0];
@@ -456,7 +445,6 @@ async function openPreviewModal(fileId) {
 
   let bucket = "documents";
   let pathInsideBucket = file.storage_path;
-
   if (file.storage_path.includes("/")) {
     const parts = file.storage_path.split("/");
     bucket = parts[0];
@@ -468,7 +456,6 @@ async function openPreviewModal(fileId) {
   const signedUrl = data?.signedUrl || "#";
 
   document.getElementById("prevDownloadBtn").href = signedUrl;
-
   const viewerBox = document.getElementById("previewViewerBox");
 
   if (error || !data?.signedUrl) {
@@ -495,7 +482,6 @@ async function openPreviewModal(fileId) {
         </div>
       </div>`;
   }
-
   document.getElementById("previewFileModal").classList.add("open");
 }
 
@@ -527,7 +513,6 @@ document.getElementById("folderForm")?.addEventListener("submit", async (e) => {
 
   try {
     const bucketName = slugify(name);
-
     const { data: newFolder, error } = await supabaseClient
       .from("folder")
       .insert({ display_name: name, bucket_name: bucketName, created_by: currentUser.id })
@@ -535,7 +520,6 @@ document.getElementById("folderForm")?.addEventListener("submit", async (e) => {
       .single();
 
     if (error) throw error;
-
     supabaseClient.functions.invoke("create-bucket", { body: { bucketName } });
 
     allFoldersData.push(newFolder);
@@ -597,7 +581,6 @@ document.getElementById("hashtagForm")?.addEventListener("submit", async (e) => 
       .single();
 
     if (error) throw error;
-
     allHashtagsData.push(newTag);
     localStorage.setItem("cache_hashtags", JSON.stringify(allHashtagsData));
     renderHashtagManageList();
@@ -867,12 +850,8 @@ async function loadHistory() {
   }
 }
 
-/**
- * HÀM 1: Tải Cài Đặt Cấu Hình Hệ Thống & Cập Nhật Tên / Logo Ở Góc Trên Bên Trái
- */
 async function loadSettings() {
   try {
-    // 1. Lấy dữ liệu từ bảng site_settings
     const { data: siteData } = await supabaseClient
       .from("site_settings")
       .select("*")
@@ -880,22 +859,12 @@ async function loadSettings() {
       .maybeSingle();
 
     if (siteData) {
-      // Đổ dữ liệu hiện tại vào ô nhập
-      if (document.getElementById("settingSiteName")) {
-        document.getElementById("settingSiteName").value = siteData.site_name || "";
-      }
-      if (document.getElementById("settingSiteLogo")) {
-        document.getElementById("settingSiteLogo").value = siteData.site_logo || "";
-      }
-      if (document.getElementById("settingTrashDays")) {
-        document.getElementById("settingTrashDays").value = siteData.trash_retention_days || 30;
-      }
-
-      // CẬP NHẬT LOGO VÀ TÊN Ở GÓC TRÊN BÊN TRÁI SIDEBAR (.brand)
+      if (document.getElementById("settingSiteName")) document.getElementById("settingSiteName").value = siteData.site_name || "";
+      if (document.getElementById("settingSiteLogo")) document.getElementById("settingSiteLogo").value = siteData.site_logo || "";
+      if (document.getElementById("settingTrashDays")) document.getElementById("settingTrashDays").value = siteData.trash_retention_days || 30;
       applyBrandSettings(siteData.site_name, siteData.site_logo);
     }
 
-    // 2. Lấy dữ liệu từ bảng site_setting (Thông tin liên hệ cũ)
     const { data: contactData } = await supabaseClient
       .from("site_setting")
       .select("phone, email, facebook")
@@ -912,9 +881,6 @@ async function loadSettings() {
   }
 }
 
-/**
- * HÀM HỖ TRỢ: Đổi giao diện Logo / Tên góc trái Sidebar
- */
 function applyBrandSettings(siteName, siteLogo) {
   const brandEl = document.querySelector(".brand");
   if (!brandEl) return;
@@ -922,13 +888,11 @@ function applyBrandSettings(siteName, siteLogo) {
   const brandMark = brandEl.querySelector(".brand-mark");
   const brandTitle = brandEl.querySelector("strong");
 
-  // Cập nhật Tên trang web
   if (brandTitle && siteName) {
     brandTitle.textContent = siteName;
     document.title = `${siteName} - Admin Panel`;
   }
 
-  // Cập nhật Logo (Nếu nhập Link ảnh http/https -> hiển thị <img>, nếu nhập Chữ cái -> hiển thị Chữ)
   if (brandMark && siteLogo) {
     if (siteLogo.startsWith("http://") || siteLogo.startsWith("https://")) {
       brandMark.innerHTML = `<img src="${escapeHTML(siteLogo)}" alt="Logo" style="width:100%; height:100%; object-fit:cover; border-radius:inherit;">`;
@@ -938,9 +902,6 @@ function applyBrandSettings(siteName, siteLogo) {
   }
 }
 
-/**
- * HÀM 2: Lưu Cấu hình Website (Tên Web, Logo, Số ngày Thùng rác)
- */
 async function saveSiteSettings() {
   const siteName = document.getElementById("settingSiteName")?.value.trim();
   const siteLogo = document.getElementById("settingSiteLogo")?.value.trim();
@@ -955,18 +916,16 @@ async function saveSiteSettings() {
     });
 
     if (error) throw error;
-
-    // Cập nhật ngay lập tức giao diện logo/tên trên màn hình mà không cần load lại trang
     applyBrandSettings(siteName, siteLogo);
+    showToast("Đã lưu cấu hình hệ thống", "");
   } catch (err) {
-    console.error("Lỗi lưu site_settings:", err.message);
-    throw err;
+    showToast("Lỗi lưu cấu hình", err.message);
   }
 }
 
 document.getElementById("settingsForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  await saveSiteSettings(); // Gọi lưu Tên web, Logo & Số ngày thùng rác
+  await saveSiteSettings();
   await supabaseClient.from("site_setting").upsert({
     id: 1,
     phone: document.getElementById("settingPhone").value.trim(),
@@ -1003,7 +962,6 @@ async function toggleFileStatus(id) {
   showToast("Đã cập nhật trạng thái", "");
 }
 
-// Chuyển file thành xóa mềm (vào Thùng rác)
 async function purgeFile(id) {
   if (!confirm("Bạn có chắc muốn chuyển tài liệu này vào Thùng rác?")) return;
   const { error } = await supabaseClient
@@ -1017,7 +975,6 @@ async function purgeFile(id) {
   showToast("Đã chuyển vào Thùng rác", "");
 }
 
-// Tải danh sách Thùng rác cho Admin
 async function loadAdminTrashBin() {
   const { data } = await supabaseClient
     .from("file")
@@ -1049,7 +1006,6 @@ async function loadAdminTrashBin() {
   `).join('');
 }
 
-// Khôi phục file
 async function restoreFileFromTrash(id) {
   await supabaseClient.from("file").update({ is_deleted: false, deleted_at: null }).eq("id", id);
   showToast("Đã khôi phục tài liệu", "");
@@ -1057,7 +1013,6 @@ async function restoreFileFromTrash(id) {
   await loadAllFiles();
 }
 
-// Xóa vĩnh viễn file khỏi CSDL & Storage (Chỉ Admin)
 async function hardDeleteFile(id, bucket, storagePath) {
   if (!confirm("CẢNH BÁO: Xóa vĩnh viễn sẽ mất hoàn toàn file và không thể khôi phục. Tiếp tục?")) return;
   const cleanPath = storagePath.replace(`${bucket}/`, "");
@@ -1067,102 +1022,6 @@ async function hardDeleteFile(id, bucket, storagePath) {
   await loadAdminTrashBin();
 }
 
-// Lưu Tên Web, Logo & Số ngày giữ thùng rác (Bảng site_settings)
-async function saveSiteSettings() {
-  const siteName = document.getElementById("settingSiteName")?.value.trim();
-  const siteLogo = document.getElementById("settingSiteLogo")?.value.trim();
-  const trashDays = parseInt(document.getElementById("settingTrashDays")?.value) || 30;
-
-  const { error } = await supabaseClient.from("site_settings").upsert({
-    id: 1,
-    site_name: siteName,
-    site_logo: siteLogo,
-    trash_retention_days: trashDays
-  });
-
-  if (error) showToast("Lỗi lưu cấu hình", error.message);
-  else showToast("Đã lưu cấu hình hệ thống", "");
-}
-// 1. Chuyển file vào Thùng rác (Xóa mềm - Soft Delete)
-async function purgeFile(id) {
-  if (!confirm("Bạn có chắc muốn chuyển tài liệu này vào Thùng rác?")) return;
-  const { error } = await supabaseClient
-    .from("file")
-    .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-    .eq("id", id);
-
-  if (error) return showToast("Lỗi", error.message);
-  await loadAllFiles();
-  renderFileTable();
-  showToast("Đã chuyển vào Thùng rác", "");
-}
-
-// 2. Tải danh sách Thùng rác hệ thống dành cho Admin
-async function loadAdminTrashBin() {
-  const { data } = await supabaseClient
-    .from("file")
-    .select("id, file_name, storage_path, deleted_at, id_user, folder:id_folder(display_name, bucket_name), user:id_user(user_name)")
-    .eq("is_deleted", true)
-    .order("deleted_at", { ascending: false });
-
-  const trashList = data || [];
-  const emptyEl = document.getElementById("adminTrashEmptyState");
-  if (emptyEl) emptyEl.hidden = trashList.length > 0;
-
-  const body = document.getElementById("adminTrashTableBody");
-  if (!body) return;
-
-  body.innerHTML = trashList.map((file, idx) => `
-    <tr>
-      <td>${idx + 1}</td>
-      <td><strong>${escapeHTML(file.file_name)}</strong></td>
-      <td>${escapeHTML(file.folder?.display_name || "-")}</td>
-      <td>${escapeHTML(file.user?.user_name || "Người dùng ẩn danh")}</td>
-      <td>${formatDateTime(file.deleted_at)}</td>
-      <td>
-        <div class="actions">
-          <button class="action-btn" onclick="restoreFileFromTrash('${file.id}')" title="Khôi phục">↺</button>
-          <button class="action-btn delete" onclick="hardDeleteFile('${file.id}', '${file.folder?.bucket_name || 'documents'}', '${file.storage_path}')" title="Xóa vĩnh viễn">⌫</button>
-        </div>
-      </td>
-    </tr>
-  `).join('');
-}
-
-// 3. Khôi phục file từ Thùng rác về danh sách chính
-async function restoreFileFromTrash(id) {
-  await supabaseClient.from("file").update({ is_deleted: false, deleted_at: null }).eq("id", id);
-  showToast("Đã khôi phục tài liệu", "");
-  await loadAdminTrashBin();
-  await loadAllFiles();
-}
-
-// 4. Xóa vĩnh viễn file khỏi CSDL & Storage (Chỉ dành cho Admin)
-async function hardDeleteFile(id, bucket, storagePath) {
-  if (!confirm("CẢNH BÁO: Xóa vĩnh viễn sẽ mất hoàn toàn file và không thể khôi phục. Tiếp tục?")) return;
-  const cleanPath = storagePath.replace(`${bucket}/`, "");
-  await supabaseClient.storage.from(bucket).remove([cleanPath]);
-  await supabaseClient.from("file").delete().eq("id", id);
-  showToast("Đã xóa vĩnh viễn khỏi hệ thống", "");
-  await loadAdminTrashBin();
-}
-
-// 5. Lưu Cấu hình Website (Tên Web, Logo, Số ngày lưu Thùng rác)
-async function saveSiteSettings() {
-  const siteName = document.getElementById("settingSiteName")?.value.trim();
-  const siteLogo = document.getElementById("settingSiteLogo")?.value.trim();
-  const trashDays = parseInt(document.getElementById("settingTrashDays")?.value) || 30;
-
-  const { error } = await supabaseClient.from("site_settings").upsert({
-    id: 1,
-    site_name: siteName,
-    site_logo: siteLogo,
-    trash_retention_days: trashDays
-  });
-
-  if (error) showToast("Lỗi lưu cấu hình", error.message);
-  else showToast("Đã lưu cấu hình hệ thống", "");
-}
 function slugify(t) { return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""); }
 document.getElementById("btnGoToUpload")?.addEventListener("click", () => switchPage("upload"));
 document.addEventListener("click", (e) => { const nav = e.target.closest("[data-page]"); if (nav) switchPage(nav.dataset.page); });
@@ -1175,16 +1034,12 @@ document.getElementById("logoutBtn")?.addEventListener("click", async () => {
 
 function switchPage(p) {
   const targetPage = pageTitles[p] ? p : "files";
-
   document.querySelectorAll(".nav-item").forEach(i => i.classList.toggle("active", i.dataset.page === targetPage));
   document.querySelectorAll(".page").forEach(s => s.classList.remove("active"));
-
   const activeEl = document.getElementById(`${targetPage}Page`);
   if (activeEl) activeEl.classList.add("active");
-
   if (elBreadcrumbCurrent) elBreadcrumbCurrent.textContent = pageTitles[targetPage];
   if (elSidebar) elSidebar.classList.remove("open");
-
   if (window.location.hash !== `#${targetPage}`) {
     history.pushState(null, "", `#${targetPage}`);
   }
@@ -1209,74 +1064,4 @@ function initThemeToggle(isDark) {
     document.documentElement.dataset.theme = toggle.checked ? "dark" : "light";
     await supabaseClient.from("user").update({ color: toggle.checked }).eq("id", currentUser.id);
   });
-}
-/* ==========================================================================
-   BỔ SUNG: CÀI ĐẶT HỆ THỐNG & THÙNG RÁC CHO ADMIN
-   ========================================================================== */
-
-// 1. Lưu Cài đặt Website (Tên web, Logo, Số ngày lưu thùng rác)
-async function saveSiteSettings() {
-  const nameInput = document.getElementById('settingSiteName')?.value.trim();
-  const logoInput = document.getElementById('settingSiteLogo')?.value.trim();
-  const trashDaysInput = parseInt(document.getElementById('settingTrashDays')?.value) || 30;
-
-  try {
-    const { error } = await supabaseClient
-      .from('site_settings')
-      .upsert({
-        id: 1,
-        site_name: nameInput,
-        site_logo: logoInput,
-        trash_retention_days: trashDaysInput
-      });
-
-    if (error) throw error;
-    alert("✓ Đã lưu cài đặt hệ thống thành công!");
-    window.location.reload();
-  } catch (err) {
-    alert("❌ Lỗi lưu cài đặt: " + err.message);
-  }
-}
-
-// 2. Admin lấy toàn bộ danh sách file trong Thùng rác hệ thống
-async function adminGetTrashBinFiles() {
-  try {
-    const { data, error } = await supabaseClient
-      .from('file')
-      .select('*, user(user_name)')
-      .eq('is_deleted', true)
-      .order('deleted_at', { ascending: false });
-
-    if (error) throw error;
-    return data || [];
-  } catch (err) {
-    console.error("Lỗi lấy danh sách thùng rác Admin:", err.message);
-    return [];
-  }
-}
-
-// 3. Admin XÓA VĨNH VIỄN file khỏi hệ thống (Dành riêng cho Admin)
-async function adminPermanentDelete(fileId, storagePath) {
-  if (!confirm("⚠️ CẢNH BÁO: Bạn có chắc chắn muốn XÓA VĨNH VIỄN tài liệu này? Thao tác này KHÔNG THỂ HOÀN TÁC!")) {
-    return;
-  }
-
-  try {
-    // Xóa file trong Storage nếu có đường dẫn
-    if (storagePath) {
-      await supabaseClient.storage.from('documents').remove([storagePath]);
-    }
-
-    // Xóa bản ghi trong Database
-    const { error: dbErr } = await supabaseClient
-      .from('file')
-      .delete()
-      .eq('id', fileId);
-
-    if (dbErr) throw dbErr;
-
-    alert("✓ Đã xóa vĩnh viễn tài liệu khỏi hệ thống!");
-  } catch (err) {
-    alert("❌ Lỗi khi xóa vĩnh viễn: " + err.message);
-  }
 }
