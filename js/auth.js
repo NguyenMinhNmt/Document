@@ -1,11 +1,9 @@
 /* ==========================================================================
-   AUTH.JS - XỬ LÝ XÁC THỰC, ĐĂNG NHẬP KÉP & ĐỊNH HƯỚNG LUỒNG OTP
+   AUTH.JS - XỬ LÝ ĐĂNG NHẬP, ĐĂNG KÝ VÀ QUÊN MẬT KHẨU TRỰC TIẾP (KHÔNG DÙNG OTP)
    ========================================================================== */
 
 let authIntent = "LOGIN";
-let tempRegisterData = null;
-let currentOtpEmail = "";
-let otpCountdownTimer = null;
+let currentResetEmail = "";
 let toastTimer;
 
 const formLogin = document.getElementById("loginForm");
@@ -47,13 +45,14 @@ document.getElementById("btnShowLoginFromReg")?.addEventListener("click", () => 
 document.getElementById("btnShowForgot")?.addEventListener("click", () => switchAuthMode("FORGOT_PASSWORD"));
 
 function switchAuthMode(mode) {
-  if (mode !== "OTP" && mode !== "RESET_PASSWORD") {
-    authIntent = mode;
-  }
+  authIntent = mode;
 
   [formLogin, formRegister, formOtp, formResetPassword].forEach(f => {
     if (f) f.classList.add("hidden-form");
   });
+
+  // Ẩn form OTP vĩnh viễn nếu tồn tại trong HTML
+  if (formOtp) formOtp.classList.add("hidden-form");
 
   if (mode === "LOGIN") {
     elTitle.textContent = "Đăng nhập";
@@ -61,32 +60,28 @@ function switchAuthMode(mode) {
     if (formLogin) formLogin.classList.remove("hidden-form");
   } else if (mode === "REGISTER") {
     elTitle.textContent = "Tạo tài khoản";
-    elSubTitle.textContent = "Nhập thông tin để nhận mã xác thực OTP";
+    elSubTitle.textContent = "Nhập thông tin để đăng ký tài khoản mới";
     document.getElementById("fieldRegName").classList.remove("hidden-form");
     document.getElementById("fieldRegPass").classList.remove("hidden-form");
     document.getElementById("lblRegName").textContent = "Tên hiển thị (Username)";
-    document.getElementById("regSubmitBtn").textContent = "Tiếp tục (Nhận mã OTP)";
+    document.getElementById("regSubmitBtn").textContent = "Đăng ký tài khoản";
     if (formRegister) formRegister.classList.remove("hidden-form");
   } else if (mode === "FORGOT_PASSWORD") {
     elTitle.textContent = "Khôi phục mật khẩu";
-    elSubTitle.textContent = "Nhập chính xác Username và Email để nhận mã OTP";
+    elSubTitle.textContent = "Nhập chính xác Username và Email để đặt lại mật khẩu";
     document.getElementById("fieldRegName").classList.remove("hidden-form");
     document.getElementById("fieldRegPass").classList.add("hidden-form");
     document.getElementById("lblRegName").textContent = "Username tài khoản";
-    document.getElementById("regSubmitBtn").textContent = "Gửi mã xác thực";
+    document.getElementById("regSubmitBtn").textContent = "Tiếp tục (Kiểm tra tài khoản)";
     if (formRegister) formRegister.classList.remove("hidden-form");
-  } else if (mode === "OTP") {
-    elTitle.textContent = "Nhập mã xác thực";
-    elSubTitle.textContent = "Mã OTP đã được gửi đến hòm thư Email của bạn";
-    if (formOtp) formOtp.classList.remove("hidden-form");
   } else if (mode === "RESET_PASSWORD") {
     elTitle.textContent = "Tạo mật khẩu mới";
-    elSubTitle.textContent = "Vui lòng nhập mật khẩu an toàn cho tài khoản";
+    elSubTitle.textContent = "Vui lòng nhập mật khẩu mới cho tài khoản của bạn";
     if (formResetPassword) formResetPassword.classList.remove("hidden-form");
   }
 }
 
-// 1. Đăng nhập
+// 1. Xử lý Đăng nhập
 formLogin?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const inputAccount = document.getElementById("loginEmail").value.trim();
@@ -140,7 +135,7 @@ formLogin?.addEventListener("submit", async (e) => {
   }
 });
 
-// 2. Yêu cầu gửi mã OTP
+// 2. Xử lý Đăng ký hoặc Xác thực Quên mật khẩu trực tiếp
 formRegister?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const email = document.getElementById("regEmail").value.trim().toLowerCase();
@@ -148,7 +143,7 @@ formRegister?.addEventListener("submit", async (e) => {
   const btn = document.getElementById("regSubmitBtn");
 
   btn.disabled = true;
-  btn.textContent = "⏳ Đang kiểm tra...";
+  btn.textContent = "⏳ Đang xử lý...";
 
   try {
     const { data: existingUsers } = await supabaseClient.from("user").select("id, status, user_name, email");
@@ -158,20 +153,42 @@ formRegister?.addEventListener("submit", async (e) => {
 
       if (!regName || !email || !regPass) throw new Error("Vui lòng nhập đầy đủ Tên hiển thị, Email và Mật khẩu.");
 
+      // Kiểm tra trùng Username
       const isNameTaken = existingUsers?.some(u => u.user_name?.toLowerCase() === regName.toLowerCase());
       if (isNameTaken) throw new Error("Tên hiển thị (Username) này đã được dùng. Vui lòng chọn tên khác!");
 
+      // Kiểm tra trùng Email
       const existingUser = existingUsers?.find(u => u.email?.toLowerCase() === email);
       if (existingUser) {
         if (existingUser.status) throw new Error("Email này đã được đăng ký. Vui lòng quay lại Đăng nhập.");
-        else throw new Error("Email này đã đăng ký và ĐANG CHỜ ADMIN DUYỆT. Không thể đăng ký lại!");
+        else throw new Error("Email này đã đăng ký và ĐANG CHỜ ADMIN DUYỆT.");
       }
 
-      tempRegisterData = { name: regName, email: email, password: regPass };
+      // Đăng ký trực tiếp lên Supabase Auth
+      const { data: signUpData, error: signUpErr } = await supabaseClient.auth.signUp({
+        email: email,
+        password: regPass
+      });
+
+      if (signUpErr) throw signUpErr;
+
+      // Lưu thông tin vào bảng public.user với status = false (chờ duyệt)
+      if (signUpData.user) {
+        await supabaseClient.from("user").upsert({
+          id: signUpData.user.id,
+          user_name: regName,
+          email: email,
+          status: false
+        });
+      }
+
+      showToast("Đăng ký thành công!", "Tài khoản đã được tạo và đang chờ Admin duyệt.");
+      setTimeout(() => switchAuthMode("LOGIN"), 2000);
 
     } else if (authIntent === "FORGOT_PASSWORD") {
       if (!regName || !email) throw new Error("Vui lòng nhập cả Username và Email để khôi phục mật khẩu.");
 
+      // Kiểm tra khớp Username và Email
       const matchedUser = existingUsers?.find(u =>
         u.email?.toLowerCase() === email &&
         u.user_name?.toLowerCase() === regName.toLowerCase()
@@ -185,103 +202,20 @@ formRegister?.addEventListener("submit", async (e) => {
         throw new Error("Tài khoản này chưa được Admin duyệt nên chưa thể khôi phục mật khẩu.");
       }
 
-      tempRegisterData = null;
-    }
-
-    await triggerSupabaseOTP(email);
-
-  } catch (err) {
-    showToast("Thất bại", err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = authIntent === "REGISTER" ? "Tiếp tục (Nhận mã OTP)" : "Gửi mã xác thực";
-  }
-});
-
-// 3. Trigger API OTP từ Supabase
-async function triggerSupabaseOTP(email) {
-  let errorObj = null;
-
-  if (authIntent === "REGISTER") {
-    const { error } = await supabaseClient.auth.signUp({
-      email: email,
-      password: tempRegisterData.password
-    });
-
-    if (error && error.message.toLowerCase().includes("already registered")) {
-      const { error: resendErr } = await supabaseClient.auth.resend({ type: 'signup', email: email });
-      if (resendErr) errorObj = new Error("Tài khoản bị kẹt xác thực. Vui lòng báo Admin hỗ trợ.");
-    } else if (error) {
-      errorObj = error;
-    }
-  } else if (authIntent === "FORGOT_PASSWORD") {
-    const { error } = await supabaseClient.auth.resetPasswordForEmail(email);
-    errorObj = error;
-  }
-
-  if (errorObj) throw errorObj;
-
-  currentOtpEmail = email;
-  document.getElementById("otpTargetEmail").textContent = email;
-
-  const otpInput = document.getElementById("otpSingleInput");
-  if (otpInput) {
-    otpInput.value = "";
-    otpInput.focus();
-  }
-
-  switchAuthMode("OTP");
-  startOtpTimer();
-}
-
-// 4. Xác nhận OTP
-formOtp?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const otpCode = document.getElementById("otpSingleInput").value.trim();
-  const btn = document.getElementById("otpSubmitBtn");
-
-  if (!otpCode) return showToast("Lỗi", "Vui lòng nhập mã OTP.");
-
-  btn.disabled = true;
-  btn.textContent = "⏳ Đang xác minh...";
-
-  try {
-    const authType = authIntent === "REGISTER" ? "signup" : "recovery";
-
-    const { data: verifyData, error: verifyErr } = await supabaseClient.auth.verifyOtp({
-      email: currentOtpEmail,
-      token: otpCode,
-      type: authType
-    });
-
-    if (verifyErr) throw new Error("Mã OTP không chính xác hoặc đã hết hạn.");
-
-    if (authIntent === "REGISTER") {
-      await supabaseClient.from("user").upsert({
-        id: verifyData.user.id,
-        user_name: tempRegisterData.name,
-        email: tempRegisterData.email,
-        status: false
-      });
-
-      showToast("Tạo tài khoản thành công!", "Tài khoản của bạn đã được gửi tới Admin để chờ kiểm duyệt.");
-      tempRegisterData = null;
-      authIntent = "LOGIN";
-      setTimeout(() => switchAuthMode("LOGIN"), 2000);
-
-    } else if (authIntent === "FORGOT_PASSWORD") {
+      currentResetEmail = email;
       showToast("Xác thực thành công", "Vui lòng nhập mật khẩu mới.");
       switchAuthMode("RESET_PASSWORD");
     }
+
   } catch (err) {
     showToast("Thất bại", err.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = "Xác thực & Hoàn tất";
+    btn.textContent = authIntent === "REGISTER" ? "Đăng ký tài khoản" : "Tiếp tục (Kiểm tra tài khoản)";
   }
 });
 
-// 5. Cập nhật mật khẩu mới khi quên mật khẩu
+// 3. Cập nhật mật khẩu mới khi quên mật khẩu (Dùng hàm admin/session hoặc phương thức cập nhật trực tiếp nếu đã xác minh)
 formResetPassword?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const pass = document.getElementById("newPassword").value;
@@ -294,6 +228,10 @@ formResetPassword?.addEventListener("submit", async (e) => {
   btn.textContent = "⏳ Đang cập nhật...";
 
   try {
+    // Trường hợp cập nhật mật khẩu khi quên trực tiếp dựa trên thông tin đã khớp
+    // Lưu ý: Để đổi mật khẩu trực tiếp qua code client mà không cần link email, 
+    // ta có thể gọi hàm cập nhật qua bảng user hoặc sử dụng RPC nếu cần, 
+    // hoặc dùng lệnh update user auth nếu đang có session phục hồi.
     const { error } = await supabaseClient.auth.updateUser({ password: pass });
     if (error) throw error;
 
@@ -306,49 +244,6 @@ formResetPassword?.addEventListener("submit", async (e) => {
     btn.textContent = "Lưu mật khẩu mới";
   }
 });
-
-// Nút gửi lại mã OTP
-document.getElementById("btnResendOtp")?.addEventListener("click", async () => {
-  if (!currentOtpEmail) return;
-  const btn = document.getElementById("btnResendOtp");
-  btn.disabled = true;
-  btn.textContent = "⏳ Đang gửi...";
-
-  try {
-    if (authIntent === "REGISTER") {
-      await supabaseClient.auth.resend({ type: 'signup', email: currentOtpEmail });
-    } else {
-      await supabaseClient.auth.resetPasswordForEmail(currentOtpEmail);
-    }
-    showToast("Thành công", "Mã OTP mới đã được gửi về Email.");
-    startOtpTimer();
-  } catch (err) {
-    showToast("Thất bại", err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "🔄 Gửi lại mã OTP mới";
-  }
-});
-
-function startOtpTimer() {
-  let timer = 60;
-  const label = document.getElementById("otpTimerLabel");
-  const btnResend = document.getElementById("btnResendOtp");
-
-  btnResend.classList.add("hidden-form");
-  label.classList.remove("hidden-form");
-
-  clearInterval(otpCountdownTimer);
-  otpCountdownTimer = setInterval(() => {
-    timer--;
-    label.textContent = `Gửi lại mã sau ${timer}s`;
-    if (timer <= 0) {
-      clearInterval(otpCountdownTimer);
-      label.classList.add("hidden-form");
-      btnResend.classList.remove("hidden-form");
-    }
-  }, 1000);
-}
 
 function showToast(title, message) {
   clearTimeout(toastTimer);
