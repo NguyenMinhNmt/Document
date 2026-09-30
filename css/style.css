@@ -1725,3 +1725,67 @@ body.login-body {
     display: none;
   }
 }
+
+/* ==========================================================================
+   15. GIAO DIỆN ĐĂNG NHẬP (GIỮ FORM CŨ + CHIA CỘT + LOGO TRÒN)
+   ========================================================================== */
+
+/* Thiết lập Layout 2 cột */
+.auth-wrapper.split-layout {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  gap: 3rem;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Cột trái chứa Card form */
+.auth-left {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  /* Căn giữa card trong phần của nó */
+}
+
+/* Giới hạn kích thước của Card giống hệt lúc đầu */
+.auth-left .auth-card {
+  width: 100%;
+  max-width: 440px;
+  /* Nền và shadow được kế thừa từ CSS gốc .auth-card của bạn */
+}
+
+/* Cột phải chứa Logo */
+.auth-right {
+  flex: 1.2;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Biến Logo thành hình tròn 50% */
+.circle-logo {
+  width: 100%;
+  max-width: 450px;
+  aspect-ratio: 1 / 1;
+  /* Bắt buộc khung ảnh luôn là hình vuông */
+  border-radius: 50%;
+  /* Bo tròn 50% */
+  object-fit: cover;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  /* Đổ bóng nhẹ cho đẹp */
+}
+
+/* Responsive: Ẩn logo trên màn hình điện thoại nhỏ để hiển thị form to rõ */
+@media (max-width: 860px) {
+  .auth-wrapper.split-layout {
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .auth-right {
+    display: none;
+  }
+}

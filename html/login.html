@@ -12,91 +12,87 @@
   <link rel="stylesheet" href="../css/style.css">
 </head>
 
-<!-- BẮT BUỘC PHẢI CÓ CLASS "login-body" Ở THẺ BODY NÀY -->
+<body>
+  <!-- Thêm class split-layout để chia 2 cột -->
+  <div class="auth-wrapper split-layout">
 
-<body class="login-body">
-  <div class="auth-split-wrapper">
+    <!-- CỘT TRÁI: FORM ĐĂNG NHẬP (KHUNG TRẮNG CŨ) -->
+    <div class="auth-left">
+      <div class="auth-card">
+        <h2 class="auth-title" id="authTitle">Đăng nhập</h2>
+        <p class="auth-subtitle" id="authSubTitle">Nền tảng Trường học số K12Online</p>
 
-    <!-- CỘT TRÁI: TIÊU ĐỀ VÀ FORM -->
-    <div class="auth-left-panel">
-      <!-- Tiêu đề giống ảnh mẫu -->
-      <h1 class="main-heading">Nền tảng Tài liệu<br>Quản Lý Cơ Sở Dữ Liệu<br>Trên Môi Trường Mạng</h1>
-      <p class="sub-heading">Chào mừng bạn quay trở lại hệ thống</p>
-
-      <!-- 1. FORM ĐĂNG NHẬP -->
-      <form id="loginForm">
-        <div class="form-group">
-          <input type="text" class="form-control" id="loginEmail" required placeholder="Email hoặc Username">
-        </div>
-        <div class="form-group">
-          <div class="password-input-wrap">
-            <input type="password" class="form-control" id="loginPassword" required placeholder="••••••••">
-            <button type="button" class="toggle-pass-btn"
-              onclick="togglePasswordVisibility('loginPassword', this)">👁️️</button>
+        <!-- 1. FORM ĐĂNG NHẬP -->
+        <form id="loginForm">
+          <div class="form-group">
+            <label for="loginEmail">Email hoặc Username</label>
+            <input type="text" class="form-control" id="loginEmail" required placeholder="Nhập username hoặc email...">
           </div>
-        </div>
-
-        <div class="remember-box">
-          <input type="checkbox" id="rememberMe" checked>
-          <label for="rememberMe">Ghi nhớ mật khẩu</label>
-        </div>
-
-        <p class="note-text">Chú ý: Nếu bạn chưa có tài khoản, vui lòng chọn đăng ký tài khoản mới bên dưới!</p>
-
-        <button type="submit" class="btn-primary" id="loginSubmitBtn">Đăng nhập hệ thống <span>&gt;</span></button>
-
-        <div class="extra-actions">
-          <button type="button" class="btn-secondary-outline" id="btnShowRegister">Đăng ký tài khoản mới
-            <span>&gt;</span></button>
-          <a class="link-item" id="btnShowForgot">Quên mật khẩu?</a>
-        </div>
-      </form>
-
-      <!-- 2. FORM ĐĂNG KÝ -->
-      <form id="registerForm" class="hidden-form">
-        <div class="form-group" id="fieldRegName">
-          <input type="text" class="form-control" id="regName" placeholder="Tên hiển thị (Username)">
-        </div>
-        <div class="form-group">
-          <input type="email" class="form-control" id="regEmail" required placeholder="Email nhận mã xác thực">
-        </div>
-        <div class="form-group" id="fieldRegPass">
-          <div class="password-input-wrap">
-            <input type="password" class="form-control" id="regPassword" placeholder="Mật khẩu">
-            <button type="button" class="toggle-pass-btn"
-              onclick="togglePasswordVisibility('regPassword', this)">👁️</button>
+          <div class="form-group">
+            <label for="loginPassword">Mật khẩu</label>
+            <div class="password-input-wrap">
+              <input type="password" class="form-control" id="loginPassword" required placeholder="••••••••">
+              <button type="button" class="toggle-pass-btn"
+                onclick="togglePasswordVisibility('loginPassword', this)">👁️</button>
+            </div>
           </div>
-        </div>
-        <button type="submit" class="btn-primary" id="regSubmitBtn">Đăng ký tài khoản <span>&gt;</span></button>
-        <div class="extra-actions">
-          <button type="button" class="btn-secondary-outline" id="btnShowLoginFromReg"><span>&lt;</span> Quay lại Đăng
-            nhập</button>
-        </div>
-      </form>
+          <div class="link-group">
+            <a class="link-item" id="btnShowForgot">Quên mật khẩu?</a>
+            <a class="link-item" id="btnShowRegister">Tạo tài khoản mới</a>
+          </div>
+          <button type="submit" class="btn-primary" id="loginSubmitBtn">Đăng nhập</button>
+        </form>
 
-      <!-- 3. FORM QUÊN MẬT KHẨU -->
-      <form id="resetPasswordForm" class="hidden-form">
-        <div class="form-group">
-          <div class="password-input-wrap">
-            <input type="password" class="form-control" id="newPassword" required placeholder="Mật khẩu mới">
-            <button type="button" class="toggle-pass-btn"
-              onclick="togglePasswordVisibility('newPassword', this)">👁️</button>
+        <!-- 2. FORM ĐĂNG KÝ -->
+        <form id="registerForm" class="hidden-form">
+          <div class="form-group" id="fieldRegName">
+            <label for="regName" id="lblRegName">Tên hiển thị (Username)</label>
+            <input type="text" class="form-control" id="regName" placeholder="Ví dụ: Nmt">
           </div>
-        </div>
-        <div class="form-group">
-          <div class="password-input-wrap">
-            <input type="password" class="form-control" id="confirmNewPassword" required
-              placeholder="Xác nhận mật khẩu mới">
-            <button type="button" class="toggle-pass-btn"
-              onclick="togglePasswordVisibility('confirmNewPassword', this)">👁️</button>
+          <div class="form-group">
+            <label for="regEmail">Email nhận mã xác thực</label>
+            <input type="email" class="form-control" id="regEmail" required placeholder="nhapemail@gmail.com">
           </div>
-        </div>
-        <button type="submit" class="btn-primary" id="resetPassSubmitBtn">Lưu mật khẩu mới <span>&gt;</span></button>
-      </form>
+          <div class="form-group" id="fieldRegPass">
+            <label for="regPassword">Mật khẩu</label>
+            <div class="password-input-wrap">
+              <input type="password" class="form-control" id="regPassword" placeholder="••••••••">
+              <button type="button" class="toggle-pass-btn"
+                onclick="togglePasswordVisibility('regPassword', this)">👁️</button>
+            </div>
+          </div>
+          <div class="link-group-right">
+            <a class="link-item" id="btnShowLoginFromReg">Quay lại Đăng nhập</a>
+          </div>
+          <button type="submit" class="btn-primary" id="regSubmitBtn">Tiếp tục</button>
+        </form>
+
+        <!-- 3. FORM TẠO MẬT KHẨU MỚI -->
+        <form id="resetPasswordForm" class="hidden-form">
+          <div class="form-group">
+            <label for="newPassword">Mật khẩu mới</label>
+            <div class="password-input-wrap">
+              <input type="password" class="form-control" id="newPassword" required placeholder="••••••••">
+              <button type="button" class="toggle-pass-btn"
+                onclick="togglePasswordVisibility('newPassword', this)">👁️</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="confirmNewPassword">Xác nhận mật khẩu mới</label>
+            <div class="password-input-wrap">
+              <input type="password" class="form-control" id="confirmNewPassword" required placeholder="••••••••">
+              <button type="button" class="toggle-pass-btn"
+                onclick="togglePasswordVisibility('confirmNewPassword', this)">👁️</button>
+            </div>
+          </div>
+          <button type="submit" class="btn-primary" id="resetPassSubmitBtn">Lưu mật khẩu mới</button>
+        </form>
+      </div>
     </div>
 
-    <!-- CỘT PHẢI: LOGO ĐƯỢC BO TRÒN 50% -->
-    <div class="auth-right-panel" id="siteLogoContainer">
+    <!-- CỘT PHẢI: LOGO TRÒN -->
+    <!-- Nếu bạn muốn chuyển Logo sang trái, chỉ cần di chuyển toàn bộ khối <div class="auth-right"> này lên trên khối <div class="auth-left"> -->
+    <div class="auth-right" id="siteLogoContainer">
       <img src="https://i.imgur.com/B9B5o6p.png" alt="Logo" class="circle-logo" id="siteLogoImg">
     </div>
 
@@ -109,7 +105,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/config.js"></script>
-  <script src="../js/auth.js?v=106"></script>
+  <script src="../js/auth.js?v=107"></script>
 </body>
 
 </html>
