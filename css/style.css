@@ -1365,12 +1365,18 @@ textarea.form-control {
 }
 
 /* ==========================================================================
-   15. GIAO DIỆN ĐĂNG NHẬP (SPLIT LAYOUT + CARD TRẮNG CŨ + LOGO TRÒN)
+   15. GIAO DIỆN ĐĂNG NHẬP (NỀN XANH, BỎ KHUNG TRẮNG, LOGO TRÒN)
    ========================================================================== */
 
-/* Trả lại màu nền sáng nguyên bản của hệ thống */
-body:has(.auth-split-wrapper) {
-  background: var(--bg-main, #f6f4ee);
+/* Nền xanh lam */
+body.login-body {
+  background: linear-gradient(135deg, #0f62c6 0%, #034b9e 100%);
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Be Vietnam Pro", sans-serif;
 }
 
 .auth-split-wrapper {
@@ -1378,31 +1384,136 @@ body:has(.auth-split-wrapper) {
   width: 100%;
   max-width: 1100px;
   margin: 0 auto;
-  min-height: 100vh;
   align-items: center;
   justify-content: space-between;
   gap: 4rem;
   padding: 2rem;
 }
 
-/* Cột chứa form đăng nhập */
+/* Cột trái chứa Form & Text */
 .auth-left-panel {
   flex: 1;
-  max-width: 440px;
-  width: 100%;
+  max-width: 480px;
+  color: #ffffff;
 }
 
-/* Giữ nguyên phong cách Card trắng, bo góc, viền xám mờ của bạn */
-.auth-left-panel .auth-card {
-  background: var(--bg-panel, #ffffff);
-  border: 1px solid var(--border-color, #dad5c4);
-  border-radius: var(--radius-lg, 12px);
-  padding: 2.5rem 2.5rem;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
-  width: 100%;
+.auth-left-panel .main-heading {
+  font-size: 2.2rem;
+  font-weight: 700;
+  line-height: 1.4;
+  margin-bottom: 0.5rem;
 }
 
-/* Cột chứa Logo */
+.auth-left-panel .sub-heading {
+  font-size: 1rem;
+  color: #e2e8f0;
+  margin-bottom: 2rem;
+}
+
+/* Ô nhập liệu */
+.login-body .form-group {
+  margin-bottom: 1.25rem;
+}
+
+.login-body .form-control {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  background: #ffffff;
+  color: #1e293b;
+  outline: none;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.login-body .password-input-wrap .form-control {
+  padding-right: 3rem;
+}
+
+.login-body .toggle-pass-btn {
+  color: #64748b;
+  right: 12px;
+}
+
+.remember-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.remember-box label {
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: #e2e8f0;
+}
+
+.note-text {
+  font-size: 0.85rem;
+  color: #fcd34d;
+  margin-bottom: 1.25rem;
+  line-height: 1.4;
+}
+
+/* Nút bấm Cam & Trong suốt */
+.login-body .btn-primary {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  background: linear-gradient(90deg, #f59e0b, #ea580c);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
+.btn-secondary-outline {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  background: transparent;
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-secondary-outline:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.login-body .extra-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.login-body .link-item {
+  color: #cbd5e1;
+  text-decoration: none;
+  font-size: 0.85rem;
+  text-align: center;
+  cursor: pointer;
+}
+
+.login-body .link-item:hover {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+/* Cột phải chứa Logo */
 .auth-right-panel {
   flex: 1.2;
   display: flex;
@@ -1410,22 +1521,20 @@ body:has(.auth-split-wrapper) {
   align-items: center;
 }
 
-/* CSS xử lý biến logo thành hình tròn 50% tuyệt đối */
+/* Logo tròn 50% */
 .circle-logo {
   width: 100%;
-  max-width: 450px;
+  max-width: 480px;
   aspect-ratio: 1 / 1;
-  /* Bắt buộc khung ảnh luôn là hình vuông hoàn hảo */
   border-radius: 50%;
-  /* Bo tròn 50% thành hình tròn */
+  /* Bo tròn hoàn toàn */
   object-fit: cover;
-  /* Cắt phần ảnh thừa để không bị méo */
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
-  border: 8px solid #ffffff;
-  /* Viền trắng bo quanh logo cho nổi bật */
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+  border: 12px solid rgba(255, 255, 255, 0.15);
+  /* Viền mờ bao quanh logo */
 }
 
-/* Ẩn logo trên màn hình điện thoại cho gọn gàng */
+/* Ẩn logo khi dùng trên điện thoại nhỏ */
 @media (max-width: 860px) {
   .auth-split-wrapper {
     flex-direction: column;
