@@ -256,8 +256,10 @@
         </div>
 
         <!-- CỘT PHẢI: LOGO HÌNH TRÒN -->
-        <div class="auth-right" id="siteLogoContainer">
-          <img src="https://i.imgur.com/B9B5o6p.png" alt="Logo" class="circle-logo" id="siteLogoImg">
+        <div class="auth-right" id="siteLogoContainer"
+          style="width:320px;height:320px;flex:0 0 320px;border-radius:50%;overflow:hidden;position:relative;box-sizing:border-box;border:6px solid #e8f0ff;background:#fff;">
+          <img src="https://i.imgur.com/B9B5o6p.png" alt="Logo" class="circle-logo" id="siteLogoImg"
+            style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;">
         </div>
 
       </div>
@@ -272,6 +274,48 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/config.js"></script>
   <script src="../js/auth.js?v=107"></script>
+
+  <!-- Ép logo luôn nằm trong khung tròn, kể cả khi auth.js đổi/thay ảnh -->
+  <script>
+    (function () {
+      var busy = false;
+      function box() { return window.innerWidth <= 800 ? 160 : 320; }
+
+      function fixLogo() {
+        var c = document.getElementById('siteLogoContainer');
+        if (!c || busy) return;
+        busy = true;
+        var n = box() + 'px';
+        var set = function (el, o) {
+          for (var k in o) el.style.setProperty(k, o[k], 'important');
+        };
+        set(c, {
+          'width': n, 'height': n, 'min-width': n, 'flex': '0 0 ' + n,
+          'border-radius': '50%', 'overflow': 'hidden', 'position': 'relative',
+          'box-sizing': 'border-box'
+        });
+        c.querySelectorAll('img').forEach(function (img) {
+          set(img, {
+            'position': 'absolute', 'top': '0', 'left': '0',
+            'width': '100%', 'height': '100%',
+            'max-width': 'none', 'max-height': 'none', 'margin': '0',
+            'object-fit': 'cover', 'border-radius': '50%', 'display': 'block'
+          });
+        });
+        setTimeout(function () { busy = false; }, 0);
+      }
+
+      fixLogo();
+      window.addEventListener('load', fixLogo);
+      window.addEventListener('resize', fixLogo);
+
+      var target = document.querySelector('.auth-body') || document.body;
+      new MutationObserver(fixLogo).observe(target, {
+        childList: true, subtree: true, attributes: true,
+        attributeFilter: ['style', 'class', 'src']
+      });
+    })();
+  </script>
 </body>
 
 </html>
