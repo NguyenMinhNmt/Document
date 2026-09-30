@@ -738,7 +738,9 @@ async function loadUserTrashBin() {
       <td>${escapeHTML(file.folder?.display_name || "-")}</td>
       <td>${formatDateTime(file.deleted_at)}</td>
       <td>
-        <button class="action-btn" onclick="restoreUserFile('${file.id}')" title="Khôi phục">↺ Khôi phục</button>
+        <div class="actions">
+          <button class="action-btn" onclick="restoreUserFile('${file.id}')" title="Khôi phục">↺</button>
+        </div>
       </td>
     </tr>
   `).join('');

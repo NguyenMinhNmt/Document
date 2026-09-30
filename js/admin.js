@@ -1022,8 +1022,8 @@ async function loadAdminTrashBin() {
       <td>${formatDateTime(file.deleted_at)}</td>
       <td>
         <div class="actions">
-          <button class="action-btn" onclick="restoreFileFromTrash('${file.id}')" title="Khôi phục">↺ Khôi phục</button>
-          <button class="action-btn delete" onclick="hardDeleteFile('${file.id}', '${file.folder?.bucket_name || 'documents'}', '${file.storage_path}')" title="Xóa vĩnh viễn">⌫ Xóa vĩnh viễn</button>
+          <button class="action-btn" onclick="restoreFileFromTrash('${file.id}')" title="Khôi phục">↺</button>
+          <button class="action-btn delete" onclick="hardDeleteFile('${file.id}', '${file.folder?.bucket_name || 'documents'}', '${file.storage_path}')" title="Xóa vĩnh viễn">⌫</button>
         </div>
       </td>
     </tr>
