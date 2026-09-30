@@ -1546,246 +1546,73 @@ body.login-body {
   }
 }
 
-/* ==========================================================================
-   15. GIAO DIỆN ĐĂNG NHẬP (NỀN XANH, KHÔNG KHUNG TRẮNG, LOGO TRÒN 50%)
-   ========================================================================== */
-
-/* Ép buộc nền phải nhận màu xanh bằng !important */
-body.login-body {
-  background: linear-gradient(135deg, #0253ad 0%, #0070e0 100%) !important;
-  margin: 0;
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: "Be Vietnam Pro", sans-serif;
-}
-
-.auth-split-wrapper {
-  display: flex;
-  width: 100%;
-  max-width: 1100px;
-  margin: 0 auto;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4rem;
-  padding: 2rem;
-}
-
-/* Cột trái chứa Form & Text */
-.auth-left-panel {
-  flex: 1;
-  max-width: 480px;
-  color: #ffffff !important;
-}
-
-.auth-left-panel .main-heading {
-  font-size: 2.2rem;
-  font-weight: 700;
-  line-height: 1.4;
-  margin-bottom: 0.5rem;
-  color: #ffffff;
-}
-
-.auth-left-panel .sub-heading {
-  font-size: 1rem;
-  color: #e2e8f0;
-  margin-bottom: 2rem;
-}
-
-/* Kích thước ô nhập liệu */
-.login-body .form-group {
-  margin-bottom: 1.25rem;
-}
-
-.login-body .form-control {
-  width: 100%;
-  padding: 0.9rem 1.1rem;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  background: #ffffff;
-  color: #1e293b;
-  outline: none;
-}
-
-.login-body .password-input-wrap .form-control {
-  padding-right: 3rem;
-}
-
-.login-body .toggle-pass-btn {
-  color: #64748b;
-  right: 12px;
-}
-
-.remember-box {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.remember-box label {
-  font-size: 0.85rem;
-  cursor: pointer;
-  color: #e2e8f0;
-}
-
-.note-text {
-  font-size: 0.85rem;
-  color: #fcd34d;
-  margin-bottom: 1.25rem;
-  line-height: 1.4;
-}
-
-/* Nút bấm Cam */
-.login-body .btn-primary {
-  width: 100%;
-  padding: 0.9rem 1.1rem;
-  background: linear-gradient(90deg, #f59e0b, #ea580c);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-}
-
-.btn-secondary-outline {
-  width: 100%;
-  padding: 0.9rem 1.1rem;
-  background: transparent;
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.btn-secondary-outline:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.login-body .extra-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  margin-top: 0.5rem;
-}
-
-.login-body .link-item {
-  color: #cbd5e1;
-  text-decoration: none;
-  font-size: 0.85rem;
-  text-align: center;
-  cursor: pointer;
-}
-
-.login-body .link-item:hover {
-  color: #ffffff;
-  text-decoration: underline;
-}
-
-/* Cột phải chứa Logo */
-.auth-right-panel {
-  flex: 1.2;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-/* Logo tròn 50% */
-.circle-logo {
-  width: 100%;
-  max-width: 450px;
-  aspect-ratio: 1 / 1;
-  border-radius: 50% !important;
-  /* Bo tròn hoàn toàn */
-  object-fit: cover;
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
-  border: 8px solid #ffffff;
-}
-
-/* Responsive */
-@media (max-width: 860px) {
-  .auth-split-wrapper {
-    flex-direction: column;
-    justify-content: center;
-  }
-
-  .auth-right-panel {
-    display: none;
-  }
-}
-
-/* ==========================================================================
-   15. GIAO DIỆN ĐĂNG NHẬP (GIỮ FORM CŨ + CHIA CỘT + LOGO TRÒN)
-   ========================================================================== */
-
-/* Thiết lập Layout 2 cột */
+/* ===== Layout chia 2 cột: Đăng nhập (trái) - Logo (phải) ===== */
 .auth-wrapper.split-layout {
   display: flex;
   flex-direction: row;
-  width: 100%;
-  max-width: 1100px;
-  margin: 0 auto;
-  gap: 3rem;
-  justify-content: space-between;
-  align-items: center;
-}
-
-/* Cột trái chứa Card form */
-.auth-left {
-  flex: 1;
-  display: flex;
+  /* trái -> phải (KHÔNG dùng row-reverse) */
+  align-items: stretch;
   justify-content: center;
-  /* Căn giữa card trong phần của nó */
-}
-
-/* Giới hạn kích thước của Card giống hệt lúc đầu */
-.auth-left .auth-card {
   width: 100%;
-  max-width: 440px;
-  /* Nền và shadow được kế thừa từ CSS gốc .auth-card của bạn */
+  min-height: 100vh;
+  padding: 0;
+  margin: 0;
 }
 
-/* Cột phải chứa Logo */
-.auth-right {
-  flex: 1.2;
+/* CỘT TRÁI: form đăng nhập */
+.split-layout .auth-left {
+  flex: 1 1 50%;
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  background: #ffffff;
+  order: 1;
 }
 
-/* Biến Logo thành hình tròn 50% */
-.circle-logo {
+.split-layout .auth-left .auth-card {
   width: 100%;
-  max-width: 450px;
+  max-width: 420px;
+}
+
+/* CỘT PHẢI: logo tròn */
+.split-layout .auth-right {
+  flex: 1 1 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  background: linear-gradient(135deg, #e8f0ff, #f5f9ff);
+  order: 2;
+}
+
+.split-layout .circle-logo {
+  width: 100%;
+  max-width: 320px;
   aspect-ratio: 1 / 1;
-  /* Bắt buộc khung ảnh luôn là hình vuông */
   border-radius: 50%;
-  /* Bo tròn 50% */
   object-fit: cover;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-  /* Đổ bóng nhẹ cho đẹp */
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
 }
 
-/* Responsive: Ẩn logo trên màn hình điện thoại nhỏ để hiển thị form to rõ */
-@media (max-width: 860px) {
+/* Mobile: xếp dọc, logo lên trên, form bên dưới */
+@media (max-width: 768px) {
   .auth-wrapper.split-layout {
     flex-direction: column;
-    justify-content: center;
   }
 
-  .auth-right {
-    display: none;
+  .split-layout .auth-right {
+    order: 1;
+    flex: 0 0 auto;
+    padding: 24px;
+  }
+
+  .split-layout .auth-left {
+    order: 2;
+    flex: 1 1 auto;
+  }
+
+  .split-layout .circle-logo {
+    max-width: 140px;
   }
 }
