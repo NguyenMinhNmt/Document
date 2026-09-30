@@ -10,92 +10,233 @@
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="../css/style.css">
+
+  <!-- CSS bố cục trang đăng nhập (đặt sau style.css nên sẽ ghi đè CSS cũ) -->
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Be Vietnam Pro', sans-serif;
+    }
+
+    /* Nền trắng toàn trang */
+    .auth-wrapper.split-layout {
+      display: flex !important;
+      flex-direction: column !important;
+      /* xếp dọc: tiêu đề -> nội dung */
+      align-items: center !important;
+      justify-content: center !important;
+      min-height: 100vh;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 40px 24px;
+      background: #ffffff;
+    }
+
+    /* Khung nội dung căn giữa */
+    .auth-container {
+      width: 100%;
+      max-width: 1100px;
+    }
+
+    /* ===== 1. TRÊN CÙNG: TÊN TRANG WEB ===== */
+    .site-header {
+      margin-bottom: 36px;
+      color: #1e293b;
+    }
+
+    .site-title {
+      margin: 0 0 12px;
+      font-size: clamp(30px, 5vw, 56px);
+      font-weight: 500;
+      line-height: 1.15;
+      color: #0d4f9e;
+    }
+
+    .site-desc {
+      margin: 0;
+      max-width: 720px;
+      font-size: 16px;
+      line-height: 1.6;
+      color: #475569;
+    }
+
+    /* ===== 2. BÊN DƯỚI: 2 CỘT (form trái - logo phải) ===== */
+    .auth-body {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 48px;
+    }
+
+    /* CỘT TRÁI: form đăng nhập (giữ nguyên) */
+    .auth-body .auth-left {
+      flex: 1 1 50%;
+      display: flex;
+      justify-content: flex-start;
+      padding: 0 !important;
+      background: transparent !important;
+    }
+
+    .auth-body .auth-left .auth-card {
+      width: 100%;
+      max-width: 440px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    /* CỘT PHẢI: logo tròn */
+    .auth-body .auth-right {
+      flex: 1 1 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 !important;
+      background: transparent !important;
+    }
+
+    .auth-body .circle-logo,
+    #siteLogoImg {
+      width: 320px !important;
+      height: 320px !important;
+      /* rộng = cao -> hình tròn */
+      max-width: 100%;
+      border-radius: 50% !important;
+      object-fit: cover;
+      object-position: center;
+      display: block;
+      border: 6px solid #e8f0ff;
+      background: #ffffff;
+      box-shadow: 0 12px 32px rgba(13, 79, 158, 0.18);
+    }
+
+    /* ===== MOBILE ===== */
+    @media (max-width: 800px) {
+      .auth-body {
+        flex-direction: column-reverse;
+        /* logo lên trên, form xuống dưới */
+        gap: 28px;
+      }
+
+      .auth-body .auth-left,
+      .auth-body .auth-right {
+        flex: 0 0 auto;
+        width: 100%;
+      }
+
+      .auth-body .auth-left {
+        justify-content: center;
+      }
+
+      .auth-body .circle-logo,
+      #siteLogoImg {
+        width: 160px !important;
+        height: 160px !important;
+      }
+    }
+  </style>
 </head>
 
 <body>
-  <!-- Thêm class split-layout để chia 2 cột -->
   <div class="auth-wrapper split-layout">
+    <div class="auth-container">
 
-    <!-- CỘT TRÁI: FORM ĐĂNG NHẬP (KHUNG TRẮNG CŨ) -->
-    <div class="auth-left">
-      <div class="auth-card">
-        <h2 class="auth-title" id="authTitle">Đăng nhập</h2>
-        <p class="auth-subtitle" id="authSubTitle">Nền tảng Trường học số K12Online</p>
+      <!-- 1. TRÊN CÙNG: TÊN TRANG WEB -->
+      <header class="site-header">
+        <h1 class="site-title">Nền tảng Trường học số K12Online</h1>
+        <p class="site-desc">
+          Hệ thống hỗ trợ toàn trình công tác quản lý đào tạo, hỗ trợ dạy - học, đánh giá, kiểm tra/thi
+          trực tuyến và quản lý tương tác, truyền thông dành riêng cho các cơ sở giáo dục.
+        </p>
+      </header>
 
-        <!-- 1. FORM ĐĂNG NHẬP -->
-        <form id="loginForm">
-          <div class="form-group">
-            <label for="loginEmail">Email hoặc Username</label>
-            <input type="text" class="form-control" id="loginEmail" required placeholder="Nhập username hoặc email...">
-          </div>
-          <div class="form-group">
-            <label for="loginPassword">Mật khẩu</label>
-            <div class="password-input-wrap">
-              <input type="password" class="form-control" id="loginPassword" required placeholder="••••••••">
-              <button type="button" class="toggle-pass-btn"
-                onclick="togglePasswordVisibility('loginPassword', this)">👁️</button>
-            </div>
-          </div>
-          <div class="link-group">
-            <a class="link-item" id="btnShowForgot">Quên mật khẩu?</a>
-            <a class="link-item" id="btnShowRegister">Tạo tài khoản mới</a>
-          </div>
-          <button type="submit" class="btn-primary" id="loginSubmitBtn">Đăng nhập</button>
-        </form>
+      <!-- 2. BÊN DƯỚI: FORM (TRÁI) + LOGO TRÒN (PHẢI) -->
+      <div class="auth-body">
 
-        <!-- 2. FORM ĐĂNG KÝ -->
-        <form id="registerForm" class="hidden-form">
-          <div class="form-group" id="fieldRegName">
-            <label for="regName" id="lblRegName">Tên hiển thị (Username)</label>
-            <input type="text" class="form-control" id="regName" placeholder="Ví dụ: Nmt">
-          </div>
-          <div class="form-group">
-            <label for="regEmail">Email nhận mã xác thực</label>
-            <input type="email" class="form-control" id="regEmail" required placeholder="nhapemail@gmail.com">
-          </div>
-          <div class="form-group" id="fieldRegPass">
-            <label for="regPassword">Mật khẩu</label>
-            <div class="password-input-wrap">
-              <input type="password" class="form-control" id="regPassword" placeholder="••••••••">
-              <button type="button" class="toggle-pass-btn"
-                onclick="togglePasswordVisibility('regPassword', this)">👁️</button>
-            </div>
-          </div>
-          <div class="link-group-right">
-            <a class="link-item" id="btnShowLoginFromReg">Quay lại Đăng nhập</a>
-          </div>
-          <button type="submit" class="btn-primary" id="regSubmitBtn">Tiếp tục</button>
-        </form>
+        <!-- CỘT TRÁI: FORM ĐĂNG NHẬP (GIỮ NGUYÊN) -->
+        <div class="auth-left">
+          <div class="auth-card">
+            <h2 class="auth-title" id="authTitle">Đăng nhập</h2>
+            <p class="auth-subtitle" id="authSubTitle">Nền tảng Trường học số K12Online</p>
 
-        <!-- 3. FORM TẠO MẬT KHẨU MỚI -->
-        <form id="resetPasswordForm" class="hidden-form">
-          <div class="form-group">
-            <label for="newPassword">Mật khẩu mới</label>
-            <div class="password-input-wrap">
-              <input type="password" class="form-control" id="newPassword" required placeholder="••••••••">
-              <button type="button" class="toggle-pass-btn"
-                onclick="togglePasswordVisibility('newPassword', this)">👁️</button>
-            </div>
+            <!-- 1. FORM ĐĂNG NHẬP -->
+            <form id="loginForm">
+              <div class="form-group">
+                <label for="loginEmail">Email hoặc Username</label>
+                <input type="text" class="form-control" id="loginEmail" required
+                  placeholder="Nhập username hoặc email...">
+              </div>
+              <div class="form-group">
+                <label for="loginPassword">Mật khẩu</label>
+                <div class="password-input-wrap">
+                  <input type="password" class="form-control" id="loginPassword" required placeholder="••••••••">
+                  <button type="button" class="toggle-pass-btn"
+                    onclick="togglePasswordVisibility('loginPassword', this)">👁️</button>
+                </div>
+              </div>
+              <div class="link-group">
+                <a class="link-item" id="btnShowForgot">Quên mật khẩu?</a>
+                <a class="link-item" id="btnShowRegister">Tạo tài khoản mới</a>
+              </div>
+              <button type="submit" class="btn-primary" id="loginSubmitBtn">Đăng nhập</button>
+            </form>
+
+            <!-- 2. FORM ĐĂNG KÝ -->
+            <form id="registerForm" class="hidden-form">
+              <div class="form-group" id="fieldRegName">
+                <label for="regName" id="lblRegName">Tên hiển thị (Username)</label>
+                <input type="text" class="form-control" id="regName" placeholder="Ví dụ: Nmt">
+              </div>
+              <div class="form-group">
+                <label for="regEmail">Email nhận mã xác thực</label>
+                <input type="email" class="form-control" id="regEmail" required placeholder="nhapemail@gmail.com">
+              </div>
+              <div class="form-group" id="fieldRegPass">
+                <label for="regPassword">Mật khẩu</label>
+                <div class="password-input-wrap">
+                  <input type="password" class="form-control" id="regPassword" placeholder="••••••••">
+                  <button type="button" class="toggle-pass-btn"
+                    onclick="togglePasswordVisibility('regPassword', this)">👁️</button>
+                </div>
+              </div>
+              <div class="link-group-right">
+                <a class="link-item" id="btnShowLoginFromReg">Quay lại Đăng nhập</a>
+              </div>
+              <button type="submit" class="btn-primary" id="regSubmitBtn">Tiếp tục</button>
+            </form>
+
+            <!-- 3. FORM TẠO MẬT KHẨU MỚI -->
+            <form id="resetPasswordForm" class="hidden-form">
+              <div class="form-group">
+                <label for="newPassword">Mật khẩu mới</label>
+                <div class="password-input-wrap">
+                  <input type="password" class="form-control" id="newPassword" required placeholder="••••••••">
+                  <button type="button" class="toggle-pass-btn"
+                    onclick="togglePasswordVisibility('newPassword', this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="confirmNewPassword">Xác nhận mật khẩu mới</label>
+                <div class="password-input-wrap">
+                  <input type="password" class="form-control" id="confirmNewPassword" required placeholder="••••••••">
+                  <button type="button" class="toggle-pass-btn"
+                    onclick="togglePasswordVisibility('confirmNewPassword', this)">👁️</button>
+                </div>
+              </div>
+              <button type="submit" class="btn-primary" id="resetPassSubmitBtn">Lưu mật khẩu mới</button>
+            </form>
           </div>
-          <div class="form-group">
-            <label for="confirmNewPassword">Xác nhận mật khẩu mới</label>
-            <div class="password-input-wrap">
-              <input type="password" class="form-control" id="confirmNewPassword" required placeholder="••••••••">
-              <button type="button" class="toggle-pass-btn"
-                onclick="togglePasswordVisibility('confirmNewPassword', this)">👁️</button>
-            </div>
-          </div>
-          <button type="submit" class="btn-primary" id="resetPassSubmitBtn">Lưu mật khẩu mới</button>
-        </form>
+        </div>
+
+        <!-- CỘT PHẢI: LOGO HÌNH TRÒN -->
+        <div class="auth-right" id="siteLogoContainer">
+          <img src="https://i.imgur.com/B9B5o6p.png" alt="Logo" class="circle-logo" id="siteLogoImg">
+        </div>
+
       </div>
     </div>
-
-    <!-- CỘT PHẢI: LOGO TRÒN -->
-    <!-- Nếu bạn muốn chuyển Logo sang trái, chỉ cần di chuyển toàn bộ khối <div class="auth-right"> này lên trên khối <div class="auth-left"> -->
-    <div class="auth-right" id="siteLogoContainer">
-      <img src="https://i.imgur.com/B9B5o6p.png" alt="Logo" class="circle-logo" id="siteLogoImg">
-    </div>
-
   </div>
 
   <div class="toast" id="toast">
