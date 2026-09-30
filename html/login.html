@@ -81,15 +81,16 @@
     .auth-body .auth-left .auth-card {
       width: 100%;
       max-width: 440px;
-      background: #ffffff;
-      border: 1px solid #e2e8f0;
-      border-radius: 16px;
-      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      padding: 0 !important;
     }
 
     /* CỘT PHẢI: logo tròn */
     .auth-body .auth-right {
-      flex: 1 1 50%;
+      flex: 0 0 auto !important;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -97,19 +98,42 @@
       background: transparent !important;
     }
 
-    .auth-body .circle-logo,
-    #siteLogoImg {
+    /* Khung tròn cố định 320x320: dù ảnh gốc to cỡ nào cũng bị giới hạn trong khung */
+    #siteLogoContainer {
       width: 320px !important;
       height: 320px !important;
-      /* rộng = cao -> hình tròn */
-      max-width: 100%;
+      min-width: 320px;
+      flex: 0 0 320px !important;
       border-radius: 50% !important;
-      object-fit: cover;
-      object-position: center;
-      display: block;
+      overflow: hidden !important;
       border: 6px solid #e8f0ff;
       background: #ffffff;
       box-shadow: 0 12px 32px rgba(13, 79, 158, 0.18);
+      box-sizing: border-box;
+      position: relative;
+    }
+
+    #siteLogoContainer img,
+    #siteLogoContainer .circle-logo,
+    #siteLogoImg {
+      position: absolute !important;
+      inset: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      max-width: none !important;
+      max-height: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      border-radius: 50% !important;
+      box-shadow: none !important;
+      object-fit: cover !important;
+      object-position: center !important;
+      display: block !important;
+    }
+
+    .auth-body .auth-left {
+      min-width: 0;
     }
 
     /* ===== MOBILE ===== */
@@ -130,10 +154,11 @@
         justify-content: center;
       }
 
-      .auth-body .circle-logo,
-      #siteLogoImg {
+      #siteLogoContainer {
         width: 160px !important;
         height: 160px !important;
+        min-width: 160px;
+        flex: 0 0 160px !important;
       }
     }
   </style>
