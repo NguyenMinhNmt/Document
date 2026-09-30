@@ -12,12 +12,14 @@
   <link rel="stylesheet" href="../css/style.css">
 </head>
 
+<!-- BẮT BUỘC PHẢI CÓ CLASS "login-body" Ở THẺ BODY NÀY -->
+
 <body class="login-body">
   <div class="auth-split-wrapper">
 
-    <!-- CỘT TRÁI: TIÊU ĐỀ VÀ FORM (KHÔNG CÓ KHUNG TRẮNG) -->
+    <!-- CỘT TRÁI: TIÊU ĐỀ VÀ FORM -->
     <div class="auth-left-panel">
-      <!-- Phần giới thiệu như ảnh thiết kế -->
+      <!-- Tiêu đề giống ảnh mẫu -->
       <h1 class="main-heading">Nền tảng Tài liệu<br>Quản Lý Cơ Sở Dữ Liệu<br>Trên Môi Trường Mạng</h1>
       <p class="sub-heading">Chào mừng bạn quay trở lại hệ thống</p>
 
@@ -30,7 +32,7 @@
           <div class="password-input-wrap">
             <input type="password" class="form-control" id="loginPassword" required placeholder="••••••••">
             <button type="button" class="toggle-pass-btn"
-              onclick="togglePasswordVisibility('loginPassword', this)">👁️</button>
+              onclick="togglePasswordVisibility('loginPassword', this)">👁️️</button>
           </div>
         </div>
 
@@ -65,9 +67,7 @@
               onclick="togglePasswordVisibility('regPassword', this)">👁️</button>
           </div>
         </div>
-
         <button type="submit" class="btn-primary" id="regSubmitBtn">Đăng ký tài khoản <span>&gt;</span></button>
-
         <div class="extra-actions">
           <button type="button" class="btn-secondary-outline" id="btnShowLoginFromReg"><span>&lt;</span> Quay lại Đăng
             nhập</button>
@@ -109,7 +109,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/config.js"></script>
-  <script src="../js/auth.js?v=105"></script>
+  <script src="../js/auth.js?v=106"></script>
 </body>
 
 </html>
