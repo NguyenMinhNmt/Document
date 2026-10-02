@@ -623,7 +623,7 @@ thead th {
 }
 
 tbody td {
-  padding: 0.75rem 1.25rem;
+  padding: 0.7rem 1.25rem;
   font-size: 0.85rem;
   border-bottom: 1px solid var(--border-color);
   vertical-align: middle;
@@ -1618,5 +1618,5 @@ body.login-body {
 }
 
 .close-button {
-  font-size: 25px;
+  font-size: 28px;
 }
