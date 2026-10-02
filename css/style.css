@@ -1616,3 +1616,7 @@ body.login-body {
     max-width: 140px;
   }
 }
+
+.close-button {
+  font-size: 25px;
+}
