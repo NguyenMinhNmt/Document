@@ -146,7 +146,8 @@ formRegister?.addEventListener("submit", async (e) => {
   btn.textContent = "⏳ Đang xử lý...";
 
   try {
-    const { data: existingUsers } = await supabaseClient.from("user").select("id, status, user_name, email");
+    const { data: existingUsers, error: selectErr } = await supabaseClient.from("user").select("id, status, user_name, email");
+    if (selectErr) throw new Error("Lỗi truy xuất hệ thống: " + selectErr.message);
 
     if (authIntent === "REGISTER") {
       const regPass = document.getElementById("regPassword").value;
@@ -167,19 +168,24 @@ formRegister?.addEventListener("submit", async (e) => {
       // Đăng ký trực tiếp lên Supabase Auth
       const { data: signUpData, error: signUpErr } = await supabaseClient.auth.signUp({
         email: email,
-        password: regPass
+        password: regPass,
+        options: {
+          data: { user_name: regName }
+        }
       });
 
       if (signUpErr) throw signUpErr;
 
       // Lưu thông tin vào bảng public.user với status = false (chờ duyệt)
       if (signUpData.user) {
-        await supabaseClient.from("user").upsert({
+        const { error: upsertErr } = await supabaseClient.from("user").upsert({
           id: signUpData.user.id,
           user_name: regName,
           email: email,
           status: false
         });
+
+        if (upsertErr) throw new Error("Không thể lưu thông tin hồ sơ: " + upsertErr.message);
       }
 
       showToast("Đăng ký thành công!", "Tài khoản đã được tạo và đang chờ Admin duyệt.");
